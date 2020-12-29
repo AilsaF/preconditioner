@@ -520,27 +520,20 @@ class DeepResNetGenerator32(nn.Module):
         self.distribution = distribution
 
         self.l1 = nn.Linear(dim_z, num_features * bottom_width ** 2)  # (_, 128*4*4)
-        
-        self.block2 = DeepGenBlock(num_features, num_features,
-                            activation=activation, upsample=True,
-                            num_classes=num_classes)
-        self.block3 = DeepGenBlock(num_features, num_features,
-                            activation=activation, upsample=True,
-                            num_classes=num_classes)
-        self.block4 = DeepGenBlock(num_features, num_features,
-                            activation=activation, upsample=True,
-                            num_classes=num_classes)  
-        # self.block5 = DeepGenBlock(num_features, num_features,
-        #                     activation=activation, upsample=False,
-        #                     num_classes=num_classes)                 
-        
+
+        DeepBlocks = []
+        for i in range(12):
+            upsampleflag = (i+1)%4==0
+            DeepBlocks.append(DeepGenBlock(num_features, num_features,
+                            activation=activation, upsample=upsampleflag,
+                            num_classes=num_classes))              
+        self.DeepBlocks = nn.Sequential(*DeepBlocks)
         self.b5 = nn.BatchNorm2d(num_features)
         self.conv5 = nn.Conv2d(num_features, channel, 1, 1)  # (_, 3, 32, 32)
 
     def forward(self, z, y=None, **kwargs):
         h = self.l1(z).view(z.size(0), -1, self.bottom_width, self.bottom_width)
-        for i in range(2, 5):
-            h = getattr(self, 'block{}'.format(i))(h, y, **kwargs)
+        h = self.DeepBlocks(h)
         h = self.activation(self.b5(h))
         return torch.tanh(self.conv5(h))
 
@@ -552,15 +545,12 @@ class DeepResNetProjectionDiscriminator32(nn.Module):
         self.activation = activation
         self.c1 = Higham_norm.spectral_norm(nn.Conv2d(channel, num_features, 3, padding=1),
                                 use_adaptivePC=use_adaptivePC, pclevel=pclevel, diter=diter)
-        self.block1 = DeepDiscBlock(num_features, num_features, activation=self.activation, downsample=True,
-                                use_adaptivePC=use_adaptivePC, pclevel=pclevel, diter=diter)
-        self.block2 = DeepDiscBlock(num_features, num_features, activation=self.activation, downsample=True,
-                                use_adaptivePC=use_adaptivePC, pclevel=pclevel, diter=diter)
-        self.block3 = DeepDiscBlock(num_features, num_features, activation=self.activation, downsample=False,
-                                use_adaptivePC=use_adaptivePC, pclevel=pclevel, diter=diter)
-        self.block4 = DeepDiscBlock(num_features, num_features, activation=self.activation, downsample=False,
-                                use_adaptivePC=use_adaptivePC, pclevel=pclevel, diter=diter)
-
+        DeepBlocks = []
+        for i in range(12):
+            downsampleflag = i%4==0
+            DeepBlocks.append(DeepDiscBlock(num_features, num_features, activation=self.activation, downsample=downsampleflag,
+                                use_adaptivePC=use_adaptivePC, pclevel=pclevel, diter=diter))
+        self.DeepBlocks = nn.Sequential(*DeepBlocks)
         self.proj = Higham_norm.spectral_norm(nn.Linear(num_features, 1, bias=False), use_adaptivePC=use_adaptivePC,
                                               pclevel=pclevel, diter=diter)
         if num_classes > 0:
@@ -575,8 +565,7 @@ class DeepResNetProjectionDiscriminator32(nn.Module):
     def forward(self, x, y=None):
         h = x
         h = self.c1(x)
-        for i in range(1, 5):
-            h = getattr(self, 'block{}'.format(i))(h)
+        h = self.DeepBlocks(h)
         h = self.activation(h)
         # Global pooling
         h = torch.sum(h, dim=(2, 3))
