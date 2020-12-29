@@ -58,14 +58,28 @@ class DCGenerator32(nn.Module):
         self.dim_z = dim_z
         self.num_features = num_features
         self.first_kernel = first_kernel
-        self.l1 = nn.Linear(dim_z, num_features * 8 * first_kernel * first_kernel)
-        self.deconv1 = nn.ConvTranspose2d(num_features * 8, num_features * 4, 4, 2, 1)
+        # self.l1 = nn.Linear(dim_z, num_features * 8 * first_kernel * first_kernel)
+        # self.deconv1 = nn.ConvTranspose2d(num_features * 8, num_features * 4, 4, 2, 1)
+        # self.deconv1_bn = nn.BatchNorm2d(num_features * 4)
+        # self.deconv2 = nn.ConvTranspose2d(num_features * 4, num_features * 2, 4, 2, 1)
+        # self.deconv2_bn = nn.BatchNorm2d(num_features * 2)
+        # self.deconv3 = nn.ConvTranspose2d(num_features * 2, num_features, 4, 2, 1)
+        # self.deconv3_bn = nn.BatchNorm2d(num_features)
+        # self.conv4 = nn.Conv2d(num_features, channel, 3, 1, 1)
+
+        self.l1 = Higham_norm.spectral_norm(nn.Linear(dim_z, num_features * 8 * first_kernel * first_kernel),
+                        use_adaptivePC=False, pclevel=0, diter=1)
+        self.deconv1 = Higham_norm.spectral_norm(nn.ConvTranspose2d(num_features * 8, num_features * 4, 4, 2, 1),
+                        use_adaptivePC=False, pclevel=0, diter=1)
         self.deconv1_bn = nn.BatchNorm2d(num_features * 4)
-        self.deconv2 = nn.ConvTranspose2d(num_features * 4, num_features * 2, 4, 2, 1)
+        self.deconv2 = Higham_norm.spectral_norm(nn.ConvTranspose2d(num_features * 4, num_features * 2, 4, 2, 1),
+                        use_adaptivePC=False, pclevel=0, diter=1)
         self.deconv2_bn = nn.BatchNorm2d(num_features * 2)
-        self.deconv3 = nn.ConvTranspose2d(num_features * 2, num_features, 4, 2, 1)
+        self.deconv3 = Higham_norm.spectral_norm(nn.ConvTranspose2d(num_features * 2, num_features, 4, 2, 1),
+                        use_adaptivePC=False, pclevel=0, diter=1)
         self.deconv3_bn = nn.BatchNorm2d(num_features)
-        self.conv4 = nn.Conv2d(num_features, channel, 3, 1, 1)
+        self.conv4 = Higham_norm.spectral_norm(nn.Conv2d(num_features, channel, 3, 1, 1),
+                        use_adaptivePC=False, pclevel=0, diter=1)
 
     # forward method
     def forward(self, input):
