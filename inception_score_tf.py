@@ -17,16 +17,25 @@ import functools
 import numpy as np
 import time
 from tensorflow.python.ops import array_ops
-
-import sys
-sys.path.append('/home/illini/rsgan')
 import os
+directory_path = os.path.abspath(os.getcwd())
+import sys
+if 'tf6' in directory_path:
+    sys.path.append('/home/tf6/slicedGAN')
+elif 'illini' in directory_path:
+    sys.path.append('/home/illini/rsgan')
+else:
+    raise ValueError("invalid server")
 import datasets
 import torch
 import fid_tf
 import itertools
 import hignorm_networks
 
+if 'tf6' in directory_path:
+    folder = '/data01/tf6/ie510result/'
+elif 'illini' in directory_path:
+    sys.path.append('/home/illini/pngan/ie510result/')
 
 h_dim = 128
 eval_fid = True
@@ -34,13 +43,13 @@ eval_fid = True
 if 1:
     db = 'cifar'
     img_size = 32
-    # netG, _ = hignorm_networks.getGD('dcgan', db, 64, 64, dim_z=h_dim, image_size=img_size, ignoreD=True)
-    # folder = 'ie510result/cifar_structdcgan_GfeatureNum64_DfeatureNum64_losslog/'
+    netG, _ = hignorm_networks.getGD('dcgan', db, 64, 64, dim_z=h_dim, image_size=img_size, ignoreD=True)
+    folder += 'cifar_structdcgan_GfeatureNum64_DfeatureNum64_losslog_pcG/'
 
-    netG, _ = hignorm_networks.getGD('resnet', db, 1024, 256, dim_z=h_dim, image_size=img_size, ignoreD=True)
-    folder = 'ie510result/cifar_structresnet_GfeatureNum1024_DfeatureNum256_losshinge_deep1'
-    exp_ = 'vanilla_CIFAR_size32_dlr0.0002_glr0.0002_diter5_giter1_b10.5_b20.999_Gnumfea1024_Dnumfea256_batchsize64_useadappolarTrueiter0deepblock'
-    end = 100000
+    # netG, _ = hignorm_networks.getGD('resnet', db, 1024, 256, dim_z=h_dim, image_size=img_size, ignoreD=True)
+    # folder = 'ie510result/cifar_structresnet_GfeatureNum1024_DfeatureNum256_losshinge_deep1'
+    exp_ = 'vanilla_CIFAR_size32_dlr0.0002_glr0.0002_diter1_giter1_b10.5_b20.999_Gnumfea64_Dnumfea64_batchsize64_useadappolarFalseiter0snG'
+    end = 90000
     start = 1000
     gap = 2000
     ema = 0
@@ -196,10 +205,10 @@ for iter in range(end, start-1, -gap):
     else:
         model_path = os.path.join(folder, exp_, 'models/G_epoch{}.pth'.format(iter))
     print(model_path)
-    try:
-        netG.load_state_dict(torch.load(model_path))
-    except:
-        continue
+    # try:
+    netG.load_state_dict(torch.load(model_path))
+    # except:
+    #     # continue
     netG.cuda()
 
     data = []

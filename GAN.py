@@ -26,7 +26,7 @@ def getSavePath():
         dir_name = '/data01/tf6/'
     elif 'illini' in directory_path:
         dir_name = '/home/illini/pngan/'
-    dir_name = dir_name + 'ie510result/{}_struct{}_GfeatureNum{}_DfeatureNum{}_loss{}_deep1/'.format(args.dataset,
+    dir_name = dir_name + 'ie510result/{}_struct{}_GfeatureNum{}_DfeatureNum{}_loss{}_pcG/'.format(args.dataset,
                                  args.structure, args.Gnum_features, args.Dnum_features, args.losstype)
     if not os.path.exists(dir_name):
         os.makedirs(dir_name)
@@ -233,7 +233,7 @@ if __name__=='__main__':
 
 
 # cifar
-# CUDA_VISIBLE_DEVICES=4 python GAN.py --dataset cifar --batch_size 64 --pclevel 0 --save_freq 2000 --beta1 0.5 --beta2 0.999 --specname snG & 
+# CUDA_VISIBLE_DEVICES=3 python GAN.py --dataset cifar --batch_size 64 --pclevel 0 --apc --save_freq 2000 --beta1 0.5 --beta2 0.999 --specname pc1G & 
 
 # export MKL_NUM_THREADS=4 && CUDA_VISIBLE_DEVICES=0 python GAN.py --dataset cifar --batch_size 64 --structure resnet --Gnum_features 1024 --Dnum_features 256 --num_iters 100000  --losstype hinge --pclevel 0 --apc --save_freq 2000 --specname deepblock  &
 

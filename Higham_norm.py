@@ -239,7 +239,7 @@ class SpectralNorm(object):
         module.register_buffer(fn.name + "_v", v)
         module.register_buffer(fn.name + "_pcleval", torch.tensor(0))
         # if len(weight.shape)>2:
-        #     module.register_buffer(fn.name + "_cns", torch.tensor([0.]*64))
+        #     module.register_buffer(fn.name + "_cns", torch.tensor([0.]*61))
         # else:
         module.register_buffer(fn.name + "_cns", torch.tensor([]))
 
