@@ -547,7 +547,7 @@ class DeepResNetProjectionDiscriminator32(nn.Module):
                                 use_adaptivePC=use_adaptivePC, pclevel=pclevel, diter=diter)
         DeepBlocks = []
         for i in range(12):
-            downsampleflag = i%4==0
+            downsampleflag = i%3==0
             DeepBlocks.append(DeepDiscBlock(num_features, num_features, activation=self.activation, downsample=downsampleflag,
                                 use_adaptivePC=use_adaptivePC, pclevel=pclevel, diter=diter))
         self.DeepBlocks = nn.Sequential(*DeepBlocks)
