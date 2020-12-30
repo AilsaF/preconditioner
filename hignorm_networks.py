@@ -783,15 +783,15 @@ def getGD(structure, dataset, num_Gfeatures, num_Dfeatures, image_size, use_adap
     if structure == 'resnet':
         leaky_relu = lambda x: F.leaky_relu(x, negative_slope=0.1)
         if dataset == 'cifar':
-            # netG = ResNetGenerator32(num_features=num_Gfeatures)
-            # if not ignoreD:
-            #     num_Dfeatures /= 2
-            #     netD = ResNetProjectionDiscriminator32(num_features=num_Dfeatures, activation=leaky_relu,
-            #                         use_adaptivePC=use_adaptivePC, pclevel=pclevel, diter=diter)
-            netG = DeepResNetGenerator32(num_features=num_Gfeatures)
+            netG = ResNetGenerator32(num_features=num_Gfeatures)
             if not ignoreD:
-                netD = DeepResNetProjectionDiscriminator32(num_features=num_Dfeatures, activation=leaky_relu,
+                num_Dfeatures /= 2
+                netD = ResNetProjectionDiscriminator32(num_features=num_Dfeatures, activation=leaky_relu,
                                     use_adaptivePC=use_adaptivePC, pclevel=pclevel, diter=diter)
+            # netG = DeepResNetGenerator32(num_features=num_Gfeatures)
+            # if not ignoreD:
+            #     netD = DeepResNetProjectionDiscriminator32(num_features=num_Dfeatures, activation=leaky_relu,
+            #                         use_adaptivePC=use_adaptivePC, pclevel=pclevel, diter=diter)
         elif dataset == 'stl':
             netG = ResNetGenerator48(num_features=num_Gfeatures)
             if not ignoreD:
