@@ -530,9 +530,9 @@ class DeepResNetGenerator32(nn.Module):
         self.block4 = DeepGenBlock(num_features, num_features,
                             activation=activation, upsample=True,
                             num_classes=num_classes)  
-        # self.block5 = DeepGenBlock(num_features, num_features,
-        #                     activation=activation, upsample=False,
-        #                     num_classes=num_classes)                 
+        self.block5 = DeepGenBlock(num_features, num_features,
+                            activation=activation, upsample=False,
+                            num_classes=num_classes)                 
         
         self.b5 = nn.BatchNorm2d(num_features)
         self.conv5 = nn.Conv2d(num_features, channel, 1, 1)  # (_, 3, 32, 32)
@@ -558,7 +558,7 @@ class DeepResNetProjectionDiscriminator32(nn.Module):
                                 use_adaptivePC=use_adaptivePC, pclevel=pclevel, diter=diter)
         self.block3 = DeepDiscBlock(num_features, num_features, activation=self.activation, downsample=False,
                                 use_adaptivePC=use_adaptivePC, pclevel=pclevel, diter=diter)
-        self.block4 = DeepDiscBlock(num_features, num_features, activation=self.activation, downsample=True,
+        self.block4 = DeepDiscBlock(num_features, num_features, activation=self.activation, downsample=False,
                                 use_adaptivePC=use_adaptivePC, pclevel=pclevel, diter=diter)
 
         self.proj = Higham_norm.spectral_norm(nn.Linear(num_features, 1, bias=False), use_adaptivePC=use_adaptivePC,

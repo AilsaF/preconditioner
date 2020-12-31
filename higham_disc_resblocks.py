@@ -222,7 +222,11 @@ class DeepBlock2(nn.Module):
                                             use_adaptivePC=use_adaptivePC, pclevel=pclevel, diter=diter)
         self.c7 = Higham_norm.spectral_norm(nn.Conv2d(h_ch, h_ch, ksize, padding=pad), n_power_iterations=power_iter,
                                             use_adaptivePC=use_adaptivePC, pclevel=pclevel, diter=diter)
-        self.c8 = Higham_norm.spectral_norm(nn.Conv2d(h_ch, out_ch, kernel_size=1, padding=0), n_power_iterations=power_iter,
+        self.c8 = Higham_norm.spectral_norm(nn.Conv2d(h_ch, h_ch, ksize, padding=pad), n_power_iterations=power_iter,
+                                            use_adaptivePC=use_adaptivePC, pclevel=pclevel, diter=diter)
+        self.c9 = Higham_norm.spectral_norm(nn.Conv2d(h_ch, h_ch, ksize, padding=pad), n_power_iterations=power_iter,
+                                            use_adaptivePC=use_adaptivePC, pclevel=pclevel, diter=diter)
+        self.c10 = Higham_norm.spectral_norm(nn.Conv2d(h_ch, out_ch, kernel_size=1, padding=0), n_power_iterations=power_iter,
                                             use_adaptivePC=use_adaptivePC, pclevel=pclevel, diter=diter)
         
         if self.learnable_sc:
@@ -239,13 +243,15 @@ class DeepBlock2(nn.Module):
         h = self.c5(self.activation(h))
         h = self.c6(self.activation(h))
         h = self.c7(self.activation(h))
+        h = self.c8(self.activation(h))
+        h = self.c9(self.activation(h))
         # relu before downsample
         h = self.activation(h)
         # downsample
         if self.downsample:
             h = F.avg_pool2d(h, 2)   
         # final 1x1 conv
-        h = self.c8(h)
+        h = self.c10(h)
         return h + self.shortcut(x)
 
     def shortcut(self, x):
