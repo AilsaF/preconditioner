@@ -18,9 +18,16 @@ import numpy as np
 import time
 from tensorflow.python.ops import array_ops
 
-import sys
-sys.path.append('/home/illini/rsgan')
 import os
+directory_path = os.path.abspath(os.getcwd())
+
+import sys
+if 'tf6' in directory_path:
+    sys.path.append('/home/tf6/slicedGAN')
+elif 'illini' in directory_path:
+    sys.path.append('/home/illini/rsgan')
+else:
+    raise ValueError("invalid server")
 import datasets
 import torch
 import fid_tf
@@ -37,10 +44,10 @@ if 1:
     # netG, _ = hignorm_networks.getGD('dcgan', db, 64, 64, dim_z=h_dim, image_size=img_size, ignoreD=True)
     # folder = 'ie510result/cifar_structdcgan_GfeatureNum64_DfeatureNum64_losslog/'
 
-    netG, _ = hignorm_networks.getGD('resnet', db, 1024, 256, dim_z=h_dim, image_size=img_size, ignoreD=True)
-    folder = 'ie510result/cifar_structresnet_GfeatureNum1024_DfeatureNum256_losshinge_deep1'
-    exp_ = 'vanilla_CIFAR_size32_dlr0.0002_glr0.0002_diter5_giter1_b10.5_b20.999_Gnumfea1024_Dnumfea256_batchsize64_useadappolarTrueiter0deepblock'
-    end = 100000
+    netG, _ = hignorm_networks.getGD('resnet', db, 512, 256, dim_z=h_dim, image_size=img_size, ignoreD=True)
+    folder = '/data01/tf6/ie510result/cifar_structresnet_GfeatureNum512_DfeatureNum128_losshinge_deep7'
+    exp_ = 'vanilla_CIFAR_size32_dlr0.0002_glr0.0002_diter5_giter1_b10.5_b20.999_Gnumfea512_Dnumfea128_batchsize64_useadappolarFalseiter0deepblock'
+    end = 28000
     start = 1000
     gap = 2000
     ema = 0
