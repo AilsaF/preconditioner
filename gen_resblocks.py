@@ -26,12 +26,12 @@ class Block(nn.Module):
         self.num_classes = num_classes
 
         # Register layrs
-        self.c1 = Higham_norm.spectral_norm(nn.Conv2d(in_ch, h_ch, ksize, 1, pad), use_adaptivePC=False, pclevel=1)
-        self.c2 = Higham_norm.spectral_norm(nn.Conv2d(h_ch, out_ch, ksize, 1, pad), use_adaptivePC=False, pclevel=1)
+        self.c1 = Higham_norm.spectral_norm(nn.Conv2d(in_ch, h_ch, ksize, 1, pad), use_adaptivePC=False, pclevel=2)
+        self.c2 = Higham_norm.spectral_norm(nn.Conv2d(h_ch, out_ch, ksize, 1, pad), use_adaptivePC=False, pclevel=2)
         self.b1 = nn.BatchNorm2d(in_ch)
         self.b2 = nn.BatchNorm2d(h_ch)
         if self.learnable_sc:
-            self.c_sc = Higham_norm.spectral_norm(nn.Conv2d(in_ch, out_ch, 1), use_adaptivePC=False, pclevel=1)
+            self.c_sc = Higham_norm.spectral_norm(nn.Conv2d(in_ch, out_ch, 1), use_adaptivePC=False, pclevel=2)
         self._initialize()
 
     def _initialize(self):
