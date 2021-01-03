@@ -6,8 +6,8 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
-folder = 'ie510result/cifar_structdcgan_GfeatureNum64_DfeatureNum64_losslog/'
-exp_ = 'vanilla_CIFAR_size32_dlr0.0002_glr0.0002_diter1_giter1_b10.5_b20.999_Gnumfea64_Dnumfea64_batchsize64_sniter1_usepolarTrueiter3_ematrick3PN'
+folder = '/data01/tf6/ie510result/cifar_structresnet_GfeatureNum512_DfeatureNum256_losshinge_deep7/'
+exp_ = 'vanilla_CIFAR_size32_dlr0.0002_glr0.0002_diter5_giter1_b10.5_b20.999_Gnumfea512_Dnumfea256_batchsize64_useadappolarFalseiter0deepblock/'
 eps = 1e-12
 end = 100000
 gap = 10000
@@ -25,6 +25,8 @@ elif 'STL' in exp_:
     dataset = 'STL'
 elif 'LSUN' in exp_:
     dataset = 'LSUN'
+elif 'CELEBA' in exp_:
+    dataset = 'celeba'
 
 structure = 'dcgan' if 'dcgan' in folder else 'resnet'
 save_folder = os.path.join('Ten_Singular_dist', structure, dataset, exp_)
@@ -35,14 +37,16 @@ if not os.path.exists(save_folder):
 def plot_cn_v1():
     sing_num = 5
     order = ['1st', '2nd', '3rd', '4th', '5th']
-    usepolar = 'useadappolar' in exp_
-    usepolar = True
+    usepolar = 'useadappolarTrue' in exp_
+    # usepolar = True
     if structure == 'dcgan':
         layer_num = 7
     elif dataset == 'CIFAR':
-        layer_num = 10
+        layer_num = 35
     elif dataset == 'STL':
         layer_num = 15
+    elif dataset == 'celeba':
+        layer_num = 7
 
     singular_dict = {}
     condi_num0 = torch.empty(layer_num, len(iters))
@@ -50,7 +54,7 @@ def plot_cn_v1():
     for iter in range(len(iters)):
         path = os.path.join(folder, exp_, 'models/{}_epoch{}.pth'.format(model, gap * (iter + 1)))
         # print iter
-        m = torch.load(path)
+        m = torch.load(path, map_location=torch.device('cpu'))
         j = 0
         for k in m.keys():
             if weight_keyword in k and 'proj' not in k:
@@ -64,8 +68,8 @@ def plot_cn_v1():
                 weight_mat /= sigma
 
                 if usepolar:
-                    #piter = m[k[:-4] + 'piter']
-                    piter = 3
+                    piter = m[k[:-4] + 'pcleval']
+                    # piter = 0
                     weight_mat = preconditioner(weight_mat, piter)
                 _, S, _ = torch.svd(weight_mat)
                 singular_dict[k][:min(sing_num, S.shape[0]), iter] = S[:sing_num]
@@ -120,7 +124,7 @@ def plot_cn_v1():
     fig = plt.figure()
     for i in range(layer_num):
         plt.plot(condi_num0[i], label='layer {}'.format(i+1))
-    # plt.legend()
+    plt.legend()
     plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
     plt.xticks(range(len(iters)), range(1, 11, 1), fontsize=18)
     plt.xlabel("x10000 iteration", fontsize=18)
@@ -136,6 +140,8 @@ def plot_cn_v2():
         layer_num = 10
     elif dataset == 'STL':
         layer_num = 15
+    elif dataset == 'celeba':
+        layer_num = 7
     piters = torch.empty(layer_num, len(iters))
     condi_num = torch.empty(layer_num, len(iters))
 
@@ -143,20 +149,11 @@ def plot_cn_v2():
         path = os.path.join(folder, exp_, 'models/{}_epoch{}.pth'.format(model, gap * (iter + 1)))
         # print iter
         j = 0
-        m = torch.load(path)
+        m = torch.load(path, map_location=torch.device('cpu'))
         for key in m.keys():
             if '_cns' in key and 'proj' not in key:
                 cn = m[key][-1]
-                piter = m[key[:-3] + 'piter']
-                # avg_cn = (m[key][-3:]).mean()
-                # if avg_cn <= 5:
-                #     piter = 1
-                # elif avg_cn <= 10:
-                #     piter = 2
-                # elif avg_cn <= 20:
-                #     piter = 3
-                # else:
-                #     piter = 4
+                piter = m[key[:-3] + 'pcleval']
                 piters[j, iter] = piter
                 smallest_singular = 1 / cn
                 for _ in range(piter):
@@ -471,16 +468,17 @@ def plot_singular():
             if weight_keyword in k :
                 weight = m[k]
                 weight_mat = weight.view(weight.shape[0], -1)
+                _, S, _ = torch.svd(weight_mat)
+                true_singular[j, iter] = S[0]
+
                 u = m[k[:-4] + 'u']
                 v = m[k[:-4] + 'v']
                 sigma = torch.dot(u, torch.mv(weight_mat, v))
                 estimate_singular[j, iter] = sigma
-                _, S, _ = torch.svd(weight_mat)
-                true_singular[j, iter] = S[0]
                 j+=1
+
     np.save(save_folder+'/estimate_singular.npy', estimate_singular)
     np.save(save_folder+'/true_singular.npy', true_singular)
-
 
 
 # >>> for _ in range(10):
@@ -527,3 +525,39 @@ def plot_singular():
 # cond1
 # cond2
 # cond3
+
+def goodfellowconditionnumber(G):
+    batch_size = 64
+    z_dim = 128
+    eps = 1
+    eig_min = 1
+    eig_max = 20
+    pertubation_del=(torch.randn(batch_size, z_dim))
+    pertu_length=torch.norm(pertubation_del, dim=1, keepdim=True)
+    pertubation_del = (pertubation_del / pertu_length) * eps
+    z_ = torch.randn(batch_size, z_dim)
+    z_prime = z_ + pertubation_del
+    pertube_images = G(z_)-G(z_prime)
+    pertube_latent_var = z_ - z_prime
+    Q = torch.norm(pertube_images.view(batch_size, -1), dim=1) / torch.norm(pertube_latent_var.view(batch_size, -1), dim=1)
+    print("Q", Q)
+    L_max = 0.0
+    L_min = 0.0
+    count_max=0
+    count_min=0
+    for i in range(batch_size):
+        if Q[i] > eig_max:
+            L_max += (Q[i] - eig_max) ** 2
+            count_max+=1
+        if Q[i] < eig_min:
+            L_min += (Q[i] - eig_min) ** 2
+            count_min+=1
+    L = L_max+L_min
+    print("L", L)
+
+# netG, _ = hignorm_networks.getGD('resnet', 'stl', 64, 64, dim_z=128, image_size=48, ignoreD=True)
+# for i in range(4000, 200001, 4000):
+#     path = '/data01/tf6/ie510result/stl_structresnet_GfeatureNum64_DfeatureNum64_losshinge/vanilla_STL_size48_dlr0.0002_glr0.0002_diter1_giter1_b10.5_b20.999_Gnumfea64_Dnumfea64_batchsize64_sniter1_useadappolarFalseiter0_ematrickSN+unifD/models/G_epoch{}.pth'.format(i)
+#     netG.load_state_dict(torch.load(path))
+#     print(i)
+#     goodfellowconditionnumber(netG)
