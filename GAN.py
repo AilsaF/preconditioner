@@ -26,7 +26,7 @@ def getSavePath():
         dir_name = '/data01/tf6/'
     elif 'illini' in directory_path:
         dir_name = '/home/illini/pngan/'
-    dir_name = dir_name + 'ie510result/{}_struct{}_GfeatureNum{}_DfeatureNum{}_loss{}_deep11/'.format(args.dataset,
+    dir_name = dir_name + 'ie510result/{}_struct{}_GfeatureNum{}_DfeatureNum{}_loss{}_deep13/'.format(args.dataset,
                                  args.structure, args.Gnum_features, args.Dnum_features, args.losstype)
     if not os.path.exists(dir_name):
         os.makedirs(dir_name)

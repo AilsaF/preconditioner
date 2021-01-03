@@ -152,10 +152,7 @@ class DeepBlock2(nn.Module):
         self.c3 = nn.Conv2d(h_ch, h_ch, ksize, padding=pad)
         self.c4 = nn.Conv2d(h_ch, h_ch, ksize, padding=pad)
         self.c5 = nn.Conv2d(h_ch, h_ch, ksize, padding=pad)
-        self.c6 = nn.Conv2d(h_ch, h_ch, ksize, padding=pad)
-        self.c7 = nn.Conv2d(h_ch, h_ch, ksize, padding=pad)
-        self.c8 = nn.Conv2d(h_ch, h_ch, ksize, padding=pad)
-        self.c9 = nn.Conv2d(h_ch, out_ch, kernel_size=1, padding=0)
+        self.c6 = nn.Conv2d(h_ch, out_ch, kernel_size=1, padding=0)
         if self.num_classes > 0:
             self.b1 = CategoricalConditionalBatchNorm2d(num_classes, in_ch)
             self.b2 = CategoricalConditionalBatchNorm2d(num_classes, h_ch)
@@ -166,9 +163,6 @@ class DeepBlock2(nn.Module):
             self.b4 = nn.BatchNorm2d(h_ch)
             self.b5 = nn.BatchNorm2d(h_ch)
             self.b6 = nn.BatchNorm2d(h_ch)
-            self.b7 = nn.BatchNorm2d(h_ch)
-            self.b8 = nn.BatchNorm2d(h_ch)
-            self.b9 = nn.BatchNorm2d(h_ch)
         if self.learnable_sc:
             self.c_sc = nn.Conv2d(in_ch, out_ch, 1)
     #     self._initialize()
@@ -200,9 +194,6 @@ class DeepBlock2(nn.Module):
         h = self.c4(self.activation(self.b4(h)))
         h = self.c5(self.activation(self.b5(h)))
         h = self.c6(self.activation(self.b6(h)))
-        h = self.c7(self.activation(self.b7(h)))
-        h = self.c8(self.activation(self.b8(h)))
-        h = self.c9(self.activation(self.b9(h)))
         if self.learnable_sc:
             return h+self.c_sc(x)
         else:
