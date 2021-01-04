@@ -2,6 +2,7 @@ import argparse
 import os
 import shutil
 import time
+import math
 
 import torch
 import torch.nn as nn
@@ -11,17 +12,24 @@ import torch.optim
 import torch.utils.data
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
-import resnet
+# import resnet
+import fixup_resnet
+from torch.optim.lr_scheduler import CosineAnnealingLR
 
-model_names = sorted(name for name in resnet.__dict__
+
+# model_names = sorted(name for name in resnet.__dict__
+#     if name.islower() and not name.startswith("__")
+#                      and name.startswith("resnet")
+#                      and callable(resnet.__dict__[name]))
+model_names = sorted(name for name in fixup_resnet.__dict__
     if name.islower() and not name.startswith("__")
-                     and name.startswith("resnet")
-                     and callable(resnet.__dict__[name]))
+    and name.startswith("fixup_resnet")
+    and callable(fixup_resnet.__dict__[name]))
 
 print(model_names)
 
 parser = argparse.ArgumentParser(description='Propert ResNets for CIFAR10 in pytorch')
-parser.add_argument('--arch', '-a', metavar='ARCH', default='resnet32',
+parser.add_argument('--arch', '-a', metavar='ARCH', default='fixup_resnet44',
                     choices=model_names,
                     help='model architecture: ' + ' | '.join(model_names) +
                     ' (default: resnet32)')
@@ -71,9 +79,10 @@ def main():
         os.makedirs(args.save_dir)
 
     # model = torch.nn.DataParallel(resnet.__dict__[args.arch](skipconnection=args.skip, PC=args.PC))
-    model = resnet.__dict__[args.arch](skipconnection=args.skip, PC=args.PC)
+    # model = resnet.__dict__[args.arch](skipconnection=args.skip, PC=args.PC)
+    model = fixup_resnet.__dict__[args.arch]()
     model.cuda()
-    model.apply(resnet.init_ortho_weights)
+    # model.apply(init_ortho_weights)
     print(model)
 
     # optionally resume from a checkpoint
@@ -119,19 +128,29 @@ def main():
         model.half()
         criterion.half()
 
-    optimizer = torch.optim.SGD(model.parameters(), args.lr,
-                                momentum=args.momentum,
-                                weight_decay=args.weight_decay)
+    # optimizer = torch.optim.SGD(model.parameters(), args.lr,
+    #                             momentum=args.momentum,
+    #                             weight_decay=args.weight_decay)
+    parameters_bias = [p[1] for p in model.named_parameters() if 'bias' in p[0]]
+    parameters_scale = [p[1] for p in model.named_parameters() if 'scale' in p[0]]
+    parameters_others = [p[1] for p in model.named_parameters() if not ('bias' in p[0] or 'scale' in p[0])]
+    optimizer = torch.optim.SGD(
+            [{'params': parameters_bias, 'lr': args.lr/10000.}, 
+            {'params': parameters_scale, 'lr': args.lr/10000.}, 
+            {'params': parameters_others}], 
+            lr=args.lr, 
+            momentum=0.9, 
+            weight_decay=args.weight_decay)
 
-    lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer,
-                                                        milestones=[100, 150], last_epoch=args.start_epoch - 1)
+    # lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer,
+    #                                                     milestones=[100, 150], last_epoch=args.start_epoch - 1)
+    # if args.arch in ['resnet1202', 'resnet110']:
+    #     # for resnet1202 original paper uses lr=0.01 for first 400 minibatches for warm-up
+    #     # then switch back. In this setup it will correspond for first epoch.
+    #     for param_group in optimizer.param_groups:
+    #         param_group['lr'] = args.lr*0.1
 
-    if args.arch in ['resnet1202', 'resnet110']:
-        # for resnet1202 original paper uses lr=0.01 for first 400 minibatches for warm-up
-        # then switch back. In this setup it will correspond for first epoch.
-        for param_group in optimizer.param_groups:
-            param_group['lr'] = args.lr*0.1
-
+    lr_scheduler = CosineAnnealingLR(optimizer, args.epochs, eta_min=0, last_epoch=-1)
 
     if args.evaluate:
         validate(val_loader, model, criterion)
@@ -306,6 +325,14 @@ def accuracy(output, target, topk=(1,)):
         correct_k = correct[:k].view(-1).float().sum(0)
         res.append(correct_k.mul_(100.0 / batch_size))
     return res
+
+
+def init_ortho_weights(m):
+    if type(m) == nn.Linear or type(m) == nn.Conv2d:
+        nn.init.orthogonal_(m.weight) # may need to scale up
+        if m.bias is not None:
+            nn.init.normal_(m.bias, std=math.sqrt(0.1))
+
 
 
 if __name__ == '__main__':

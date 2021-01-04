@@ -276,11 +276,6 @@ def test(net):
     print("Total number of params", total_params)
     print("Total layers", len(list(filter(lambda p: p.requires_grad and len(p.data.size())>1, net.parameters()))))
 
-def init_ortho_weights(m):
-    if type(m) == nn.Linear or type(m) == nn.Conv2d:
-        init.orthogonal_(m.weight) # may need to scale up
-        if m.bias is not None:
-            init.normal_(m.bias, std=math.sqrt(0.1))
 
 if __name__ == "__main__":
     for net_name in __all__:

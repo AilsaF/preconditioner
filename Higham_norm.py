@@ -82,7 +82,11 @@ class SpectralNorm(object):
 
         if do_power_iteration:
             with torch.no_grad():
-                for _ in range(self.n_power_iterations):
+                if self.called_time==0:
+                    n_power_iterations = 1000
+                else:
+                    n_power_iterations = self.n_power_iterations
+                for _ in range(n_power_iterations):
                     # Spectral norm of weight equals to `u^T W v`, where `u` and `v`
                     # are the first left and right singular vectors.
                     # This power iteration produces approximations of `u` and `v`.
