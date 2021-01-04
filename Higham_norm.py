@@ -151,7 +151,7 @@ class SpectralNorm(object):
                     weight = self.preconditionerwide(weight, self.pclevel)
                 weight = weight.view(origin_shape)
         # weight = weight * 5./3
-        return weight
+        return weight * sigma
 
     def preconditionertall(self, weight, pclevel):
         if pclevel == 0:

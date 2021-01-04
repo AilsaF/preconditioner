@@ -82,7 +82,7 @@ def main():
     # model = resnet.__dict__[args.arch]()
     model = fixup_resnet.__dict__[args.arch]()
     model.cuda()
-    model.apply(init_ortho_weights)
+    # model.apply(init_ortho_weights)
     print(model)
 
     # optionally resume from a checkpoint
@@ -135,8 +135,8 @@ def main():
     parameters_scale = [p[1] for p in model.named_parameters() if 'scale' in p[0]]
     parameters_others = [p[1] for p in model.named_parameters() if not ('bias' in p[0] or 'scale' in p[0])]
     optimizer = torch.optim.SGD(
-            [{'params': parameters_bias, 'lr': args.lr/10000.}, 
-            {'params': parameters_scale, 'lr': args.lr/10000.}, 
+            [{'params': parameters_bias, 'lr': args.lr/10.}, 
+            {'params': parameters_scale, 'lr': args.lr/10.}, 
             {'params': parameters_others}], 
             lr=args.lr, 
             momentum=0.9, 
@@ -328,10 +328,14 @@ def accuracy(output, target, topk=(1,)):
 
 
 def init_ortho_weights(m):
-    if type(m) == nn.Linear or type(m) == nn.Conv2d:
+    # if type(m) == nn.Linear or type(m) == nn.Conv2d:
+    if type(m) == nn.Conv2d:
         nn.init.orthogonal_(m.weight) # may need to scale up
         if m.bias is not None:
             nn.init.normal_(m.bias, std=math.sqrt(0.1))
+    if type(m) == nn.Linear:
+        nn.init.constant_(m.weight, 0)
+        nn.init.constant_(m.bias, 0)
 
 
 
