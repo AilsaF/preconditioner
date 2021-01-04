@@ -37,9 +37,9 @@ if 1:
     # netG, _ = hignorm_networks.getGD('dcgan', db, 64, 64, dim_z=h_dim, image_size=img_size, ignoreD=True)
     # folder = 'ie510result/cifar_structdcgan_GfeatureNum64_DfeatureNum64_losslog/'
 
-    netG, _ = hignorm_networks.getGD('resnet', db, 1024, 256, dim_z=h_dim, image_size=img_size, ignoreD=True)
-    folder = 'ie510result/cifar_structresnet_GfeatureNum1024_DfeatureNum256_losshinge_deep1'
-    exp_ = 'vanilla_CIFAR_size32_dlr0.0002_glr0.0002_diter5_giter1_b10.5_b20.999_Gnumfea1024_Dnumfea256_batchsize64_useadappolarTrueiter0deepblock'
+    netG, _ = hignorm_networks.getGD('resnet', db, 256, 256, dim_z=h_dim, image_size=img_size, ignoreD=True)
+    folder = 'ie510result/cifar_structresnet_GfeatureNum256_DfeatureNum256_losshinge'
+    exp_ = 'vanilla_CIFAR_size32_dlr0.0002_glr0.0002_diter5_giter1_b10.5_b20.999_Gnumfea256_Dnumfea256_batchsize64_useadappolarTrueiter0Donly2block'
     end = 100000
     start = 1000
     gap = 2000

@@ -150,12 +150,12 @@ class SpectralNorm(object):
         return weight
 
     def preconditionertall(self, weight, pclevel):
-        if pclevel == 0:
-            return weight
+        # if pclevel == 0:
+        #     return weight
         n, m = weight.shape
         I = torch.eye(m).cuda()
         wtw = weight.t().mm(weight)
-        if pclevel == 1:
+        if pclevel <= 1:
             weight = weight.mm(1.507 * I - 0.507 * wtw)
         elif pclevel == 2:
             weight = weight.mm(2.083 * I + wtw.mm(-1.643 * I + 0.560 * wtw))
@@ -168,12 +168,12 @@ class SpectralNorm(object):
         return weight
 
     def preconditionerwide(self, weight, pclevel):
-        if pclevel == 0:
-            return weight
+        # if pclevel == 0:
+        #     return weight
         n, m = weight.shape
         I = torch.eye(n).cuda()
         wwt = weight.mm(weight.t())
-        if pclevel == 1:
+        if pclevel <= 1:
             weight = (1.507 * I - 0.507 * wwt).mm(weight)
         elif pclevel == 2:
             weight = (2.083 * I + wwt.mm(-1.643 * I + 0.560 * wwt)).mm(weight)

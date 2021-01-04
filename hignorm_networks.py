@@ -484,16 +484,16 @@ class ResNetProjectionDiscriminator32(nn.Module):
         self.block1 = OptimizedBlock(channel, num_features, use_adaptivePC=use_adaptivePC, pclevel=pclevel, diter=diter)
         self.block2 = DiscBlock(num_features, num_features, activation=self.activation, downsample=True,
                                 use_adaptivePC=use_adaptivePC, pclevel=pclevel, diter=diter)
-        self.block3 = DiscBlock(num_features, num_features, activation=self.activation, downsample=False,
-                                use_adaptivePC=use_adaptivePC, pclevel=pclevel, diter=diter)
-        self.block4 = DiscBlock(num_features, num_features, activation=self.activation, downsample=False,
-                                use_adaptivePC=use_adaptivePC, pclevel=pclevel, diter=diter)
+        # self.block3 = DiscBlock(num_features, num_features, activation=self.activation, downsample=False,
+        #                         use_adaptivePC=use_adaptivePC, pclevel=pclevel, diter=diter)
+        # self.block4 = DiscBlock(num_features, num_features, activation=self.activation, downsample=False,
+        #                         use_adaptivePC=use_adaptivePC, pclevel=pclevel, diter=diter)
         self.proj = Higham_norm.spectral_norm(nn.Linear(num_features, 1, bias=False), use_adaptivePC=use_adaptivePC,
                                               pclevel=pclevel, diter=diter)
 
     def forward(self, x, y=None):
         h = x
-        for i in range(1, 5):
+        for i in range(1, 3):
             h = getattr(self, 'block{}'.format(i))(h)
         h = self.activation(h)
         # Global pooling
@@ -769,15 +769,15 @@ def getGD(structure, dataset, num_Gfeatures, num_Dfeatures, image_size, use_adap
     if structure == 'resnet':
         leaky_relu = lambda x: F.leaky_relu(x, negative_slope=0.1)
         if dataset == 'cifar':
-            # netG = ResNetGenerator32(num_features=num_Gfeatures)
-            # if not ignoreD:
-            #     num_Dfeatures /= 2
-            #     netD = ResNetProjectionDiscriminator32(num_features=num_Dfeatures, activation=leaky_relu,
-            #                         use_adaptivePC=use_adaptivePC, pclevel=pclevel, diter=diter)
-            netG = DeepResNetGenerator32(num_features=num_Gfeatures)
+            netG = ResNetGenerator32(num_features=num_Gfeatures)
             if not ignoreD:
-                netD = DeepResNetProjectionDiscriminator32(num_features=num_Dfeatures, activation=leaky_relu,
+                num_Dfeatures /= 2
+                netD = ResNetProjectionDiscriminator32(num_features=num_Dfeatures, activation=leaky_relu,
                                     use_adaptivePC=use_adaptivePC, pclevel=pclevel, diter=diter)
+            # netG = DeepResNetGenerator32(num_features=num_Gfeatures)
+            # if not ignoreD:
+            #     netD = DeepResNetProjectionDiscriminator32(num_features=num_Dfeatures, activation=leaky_relu,
+            #                         use_adaptivePC=use_adaptivePC, pclevel=pclevel, diter=diter)
         elif dataset == 'stl':
             netG = ResNetGenerator48(num_features=num_Gfeatures)
             if not ignoreD:
