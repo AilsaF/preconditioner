@@ -12,24 +12,24 @@ import torch.optim
 import torch.utils.data
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
-# import resnet
-import fixup_resnet
+import resnet
+# import fixup_resnet
 from torch.optim.lr_scheduler import CosineAnnealingLR
 
 
-# model_names = sorted(name for name in resnet.__dict__
-#     if name.islower() and not name.startswith("__")
-#                      and name.startswith("resnet")
-#                      and callable(resnet.__dict__[name]))
-model_names = sorted(name for name in fixup_resnet.__dict__
+model_names = sorted(name for name in resnet.__dict__
     if name.islower() and not name.startswith("__")
-    and name.startswith("fixup_resnet")
-    and callable(fixup_resnet.__dict__[name]))
+                     and name.startswith("resnet")
+                     and callable(resnet.__dict__[name]))
+# model_names = sorted(name for name in fixup_resnet.__dict__
+#     if name.islower() and not name.startswith("__")
+#     and name.startswith("fixup_resnet")
+#     and callable(fixup_resnet.__dict__[name]))
 
 print(model_names)
 
 parser = argparse.ArgumentParser(description='Propert ResNets for CIFAR10 in pytorch')
-parser.add_argument('--arch', '-a', metavar='ARCH', default='fixup_resnet44',
+parser.add_argument('--arch', '-a', metavar='ARCH', default='resnet44',
                     choices=model_names,
                     help='model architecture: ' + ' | '.join(model_names) +
                     ' (default: resnet32)')
@@ -79,10 +79,10 @@ def main():
         os.makedirs(args.save_dir)
 
     # model = torch.nn.DataParallel(resnet.__dict__[args.arch](skipconnection=args.skip, PC=args.PC))
-    # model = resnet.__dict__[args.arch](skipconnection=args.skip, PC=args.PC)
-    model = fixup_resnet.__dict__[args.arch]()
+    model = resnet.__dict__[args.arch]()
+    # model = fixup_resnet.__dict__[args.arch]()
     model.cuda()
-    # model.apply(init_ortho_weights)
+    model.apply(init_ortho_weights)
     print(model)
 
     # optionally resume from a checkpoint

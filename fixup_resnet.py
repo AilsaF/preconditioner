@@ -8,154 +8,191 @@ import Higham_norm
 __all__ = ['FixupResNet', 'fixup_resnet20', 'fixup_resnet32', 'fixup_resnet44', 'fixup_resnet56', 'fixup_resnet110', 'fixup_resnet1202']
 
 
-def conv3x3(in_planes, out_planes, stride=1):
-    """3x3 convolution with padding"""
-    return Higham_norm.spectral_norm(nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
-                     padding=1, bias=False), use_adaptivePC=False, pclevel=0)
-    # return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride, padding=1, bias=False)
+def _weights_init(m):
+    classname = m.__class__.__name__
+    #print(classname)
+    if isinstance(m, nn.Linear) or isinstance(m, nn.Conv2d):
+        nn.init.kaiming_normal_(m.weight)
 
-# class LambdaLayer(nn.Module):
-#     def __init__(self, lambd):
-#         super(LambdaLayer, self).__init__()
-#         self.lambd = lambd
-
-#     def forward(self, x):
-#         return self.lambd(x)
-
-class FixupBasicBlock(nn.Module):
-    expansion = 1
-
-    def __init__(self, inplanes, planes, stride=1, downsample=None):
-        super(FixupBasicBlock, self).__init__()
-        # Both self.conv1 and self.downsample layers downsample the input when stride != 1
-        self.bias1a = nn.Parameter(torch.zeros(1))
-        self.conv1 = conv3x3(inplanes, planes, stride)
-        self.bias1b = nn.Parameter(torch.zeros(1))
-        self.relu = nn.ReLU(inplace=True)
-        self.bias2a = nn.Parameter(torch.zeros(1))
-        self.conv2 = conv3x3(planes, planes)
-        self.scale = nn.Parameter(torch.ones(1))
-        self.bias2b = nn.Parameter(torch.zeros(1))
-        self.downsample = downsample
+class LambdaLayer(nn.Module):
+    def __init__(self, lambd):
+        super(LambdaLayer, self).__init__()
+        self.lambd = lambd
 
     def forward(self, x):
-        identity = x
+        return self.lambd(x)
 
-        out = self.conv1(x + self.bias1a)
-        out = self.relu(out + self.bias1b)
+class BasicBlock(nn.Module):
+    expansion = 1
 
-        out = self.conv2(out + self.bias2a)
-        out = out * self.scale + self.bias2b
+    def __init__(self, in_planes, planes, stride=1, option='A'):
+        super(BasicBlock, self).__init__()
+        self.conv1 = nn.Conv2d(in_planes, planes, kernel_size=3, stride=stride, padding=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(planes)
+        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=1, padding=1, bias=False)
+        self.bn2 = nn.BatchNorm2d(planes)
 
-        if self.downsample is not None:
-            identity = self.downsample(x + self.bias1a)
-            identity = torch.cat((identity, torch.zeros_like(identity)), 1)
-            # identity = self.downsample(x )
+        self.shortcut = nn.Sequential()
+        if stride != 1 or in_planes != planes:
+            if option == 'A':
+                """
+                For CIFAR10 ResNet paper uses option A.
+                """
+                self.shortcut = LambdaLayer(lambda x:
+                                            F.pad(x[:, :, ::2, ::2], (0, 0, 0, 0, planes//4, planes//4), "constant", 0))
+            elif option == 'B':
+                self.shortcut = nn.Sequential(
+                     nn.Conv2d(in_planes, self.expansion * planes, kernel_size=1, stride=stride, bias=False),
+                     nn.BatchNorm2d(self.expansion * planes)
+                )
 
-        out += identity
-        out = self.relu(out)
+    def forward(self, x):
+        out = F.relu(self.bn1(self.conv1(x)))
+        out = self.bn2(self.conv2(out))
+        out += self.shortcut(x)
+        out = F.relu(out)
+        return out
 
+
+class BasicPCBlock(nn.Module):
+    expansion = 1
+
+    def __init__(self, in_planes, planes, stride=1, option='A'):
+        super(BasicPCBlock, self).__init__()
+        self.conv1 = Higham_norm.spectral_norm(nn.Conv2d(in_planes, planes, kernel_size=3, stride=stride, padding=1, bias=False),
+                                                    use_adaptivePC=True, pclevel=0)
+        # self.bn1 = nn.BatchNorm2d(planes)
+        self.conv2 = Higham_norm.spectral_norm(nn.Conv2d(planes, planes, kernel_size=3, stride=1, padding=1, bias=False),
+                                                    use_adaptivePC=True, pclevel=0)
+        # self.bn2 = nn.BatchNorm2d(planes)
+
+        self.shortcut = nn.Sequential()
+        if stride != 1 or in_planes != planes:
+            if option == 'A':
+                """
+                For CIFAR10 ResNet paper uses option A.
+                """
+                self.shortcut = LambdaLayer(lambda x:
+                                            F.pad(x[:, :, ::2, ::2], (0, 0, 0, 0, planes//4, planes//4), "constant", 0))
+            elif option == 'B':
+                self.shortcut = nn.Sequential(
+                     nn.Conv2d(in_planes, self.expansion * planes, kernel_size=1, stride=stride, bias=False),
+                     nn.BatchNorm2d(self.expansion * planes)
+                )
+
+    def forward(self, x):
+        # out = F.relu(self.bn1(self.conv1(x)))
+        # out = self.bn2(self.conv2(out))
+        out = F.relu(self.conv1(x))
+        out = self.conv2(out)
+        out += self.shortcut(x)
+        out = F.relu(out)
         return out
 
 
 class FixupResNet(nn.Module):
-
-    def __init__(self, block, layers, num_classes=10):
+    def __init__(self, block, num_blocks, num_classes=10, PC=False):
         super(FixupResNet, self).__init__()
-        print("initializing a Fixup network")
-        self.num_layers = sum(layers)
-        self.inplanes = 16
-        self.conv1 = conv3x3(3, 16)
-        self.bias1 = nn.Parameter(torch.zeros(1))
-        self.relu = nn.ReLU(inplace=True)
-        self.layer1 = self._make_layer(block, 16, layers[0])
-        self.layer2 = self._make_layer(block, 32, layers[1], stride=2)
-        self.layer3 = self._make_layer(block, 64, layers[2], stride=2)
-        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self.bias2 = nn.Parameter(torch.zeros(1))
-        self.fc = nn.Linear(64, num_classes)
+        self.in_planes = 16
+        self.PC= PC
+        if PC:
+            self.conv1 = Higham_norm.spectral_norm(nn.Conv2d(3, 16, kernel_size=3, stride=1, padding=1, bias=False),
+                                                    use_adaptivePC=True, pclevel=0)
+        else:
+            self.conv1 = nn.Conv2d(3, 16, kernel_size=3, stride=1, padding=1, bias=False)
+            self.bn1 = nn.BatchNorm2d(16)
+        self.layer1 = self._make_layer(block, 16, num_blocks[0], stride=1)
+        self.layer2 = self._make_layer(block, 32, num_blocks[1], stride=2)
+        self.layer3 = self._make_layer(block, 64, num_blocks[2], stride=2)
+        if PC:
+            self.linear = Higham_norm.spectral_norm(nn.Linear(64, num_classes), use_adaptivePC=True, pclevel=0)
+        else:
+            self.linear = nn.Linear(64, num_classes)
+        self.apply(_weights_init)
 
-        # for m in self.modules():
-        #     if isinstance(m, FixupBasicBlock):
-        #         nn.init.normal_(m.conv1.weight, mean=0, std=np.sqrt(2 / (m.conv1.weight.shape[0] * np.prod(m.conv1.weight.shape[2:]))) * self.num_layers ** (-0.5))
-        #         nn.init.constant_(m.conv2.weight, 0)
-        #     elif isinstance(m, nn.Linear):
-        #         nn.init.constant_(m.weight, 0)
-        #         nn.init.constant_(m.bias, 0)
-
-    def _make_layer(self, block, planes, blocks, stride=1):
-        downsample = None
-        if stride != 1:
-            downsample = nn.AvgPool2d(1, stride=stride)
-            # downsample = LambdaLayer(lambda x:
-            #                     F.pad(x[:, :, ::2, ::2], (0, 0, 0, 0, planes//4, planes//4), "constant", 0))
-
+    def _make_layer(self, block, planes, num_blocks, stride):
+        strides = [stride] + [1]*(num_blocks-1)
         layers = []
-        layers.append(block(self.inplanes, planes, stride, downsample))
-        self.inplanes = planes
-        for _ in range(1, blocks):
-            layers.append(block(planes, planes))
+        for stride in strides:
+            layers.append(block(self.in_planes, planes, stride))
+            self.in_planes = planes * block.expansion
 
         return nn.Sequential(*layers)
 
     def forward(self, x):
-        x = self.conv1(x)
-        x = self.relu(x + self.bias1)
-
-        x = self.layer1(x)
-        x = self.layer2(x)
-        x = self.layer3(x)
-
-        x = self.avgpool(x)
-        x = x.view(x.size(0), -1)
-        x = self.fc(x + self.bias2)
-
-        return x
-
-
-def fixup_resnet20(**kwargs):
-    """Constructs a Fixup-ResNet-20 model.
-
-    """
-    model = FixupResNet(FixupBasicBlock, [3, 3, 3], **kwargs)
-    return model
+        if self.PC:
+            out = F.relu(self.conv1(x))
+        else:
+            out = F.relu(self.bn1(self.conv1(x)))
+        out = self.layer1(out)
+        out = self.layer2(out)
+        out = self.layer3(out)
+        out = F.avg_pool2d(out, out.size()[3])
+        out = out.view(out.size(0), -1)
+        out = self.linear(out)
+        return out
 
 
-def fixup_resnet32(**kwargs):
-    """Constructs a Fixup-ResNet-32 model.
+def fixup_resnet20(skipconnection=True, PC=False):
+    if PC:
+        if skipconnection:
+            return FixupResNet(BasicPCBlock, [3, 3, 3])
+    else:
+        if skipconnection:
+            return FixupResNet(BasicBlock, [3, 3, 3])
+        
 
-    """
-    model = FixupResNet(FixupBasicBlock, [5, 5, 5], **kwargs)
-    return model
+def fixup_resnet32(skipconnection=True, PC=False):
+    if PC:
+        if skipconnection:
+            return FixupResNet(BasicPCBlock, [5, 5, 5])
+    else:
+        if skipconnection:
+            return FixupResNet(BasicBlock, [5, 5, 5])
+        
+
+def fixup_resnet44():
+    return FixupResNet(BasicBlock, [7, 7, 7])
+
+def fixup_resnet56(skipconnection=True, PC=False):
+    if PC:
+        if skipconnection:
+            return FixupResNet(BasicPCBlock, [9, 9, 9], PC=True)
+    else:
+        if skipconnection:
+            return FixupResNet(BasicBlock, [9, 9, 9])
+        
+
+def fixup_resnet110(skipconnection=True, PC=False):
+    if PC:
+        if skipconnection:
+            return FixupResNet(BasicPCBlock, [18, 18, 18], PC=True)
+    else:
+        if skipconnection:
+            return FixupResNet(BasicBlock, [18, 18, 18])
+
+def fixup_resnet1202(skipconnection=True, PC=False):
+    if PC:
+        if skipconnection:
+            return FixupResNet(BasicPCBlock, [200, 200, 200], PC=True)
+    else:
+        if skipconnection:
+            return FixupResNet(BasicBlock, [200, 200, 200])
+        
+
+def test(net):
+    import numpy as np
+    total_params = 0
+
+    for x in filter(lambda p: p.requires_grad, net.parameters()):
+        total_params += np.prod(x.data.numpy().shape)
+    print("Total number of params", total_params)
+    print("Total layers", len(list(filter(lambda p: p.requires_grad and len(p.data.size())>1, net.parameters()))))
 
 
-def fixup_resnet44(**kwargs):
-    """Constructs a Fixup-ResNet-44 model.
-
-    """
-    model = FixupResNet(FixupBasicBlock, [7, 7, 7], **kwargs)
-    return model
-
-
-def fixup_resnet56(**kwargs):
-    """Constructs a Fixup-ResNet-56 model.
-
-    """
-    model = FixupResNet(FixupBasicBlock, [9, 9, 9], **kwargs)
-    return model
-
-
-def fixup_resnet110(**kwargs):
-    """Constructs a Fixup-ResNet-110 model.
-
-    """
-    model = FixupResNet(FixupBasicBlock, [18, 18, 18], **kwargs)
-    return model
-
-
-def fixup_resnet1202(**kwargs):
-    """Constructs a Fixup-ResNet-1202 model.
-
-    """
-    model = FixupResNet(FixupBasicBlock, [200, 200, 200], **kwargs)
-    return model    
+if __name__ == "__main__":
+    for net_name in __all__:
+        if net_name.startswith('resnet'):
+            print(net_name)
+            test(globals()[net_name]())
+            print()

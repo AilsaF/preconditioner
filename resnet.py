@@ -224,8 +224,8 @@ class ResNet(nn.Module):
 #             return ResNet(WoSkipBlock, [5, 5, 5])
 
 
-# def resnet44():
-#     return ResNet(BasicBlock, [7, 7, 7])
+def resnet44():
+    return ResNet(BasicBlock, [7, 7, 7])
 
 
 def resnet56(skipconnection=True, PC=False):
