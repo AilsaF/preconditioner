@@ -75,6 +75,7 @@ def main():
 
 
     # Check the save_dir exists or not
+    args.save_dir = "cifar_{}_lr{}_cosine_apc_fixup_woscalar".format(args.arch, args.lr)
     if not os.path.exists(args.save_dir):
         os.makedirs(args.save_dir)
 

@@ -21,29 +21,29 @@ class FixupBasicBlock(nn.Module):
     def __init__(self, inplanes, planes, stride=1, downsample=None):
         super(FixupBasicBlock, self).__init__()
         # Both self.conv1 and self.downsample layers downsample the input when stride != 1
-        self.bias1a = nn.Parameter(torch.zeros(1))
+        # self.bias1a = nn.Parameter(torch.zeros(1))
         self.conv1 = conv3x3(inplanes, planes, stride)
-        self.bias1b = nn.Parameter(torch.zeros(1))
+        # self.bias1b = nn.Parameter(torch.zeros(1))
         self.relu = nn.ReLU(inplace=True)
-        self.bias2a = nn.Parameter(torch.zeros(1))
+        # self.bias2a = nn.Parameter(torch.zeros(1))
         self.conv2 = conv3x3(planes, planes)
-        self.scale0 = nn.Parameter(torch.ones(1))
-        self.scale = nn.Parameter(torch.ones(1))
-        self.bias2b = nn.Parameter(torch.zeros(1))
+        # self.scale0 = nn.Parameter(torch.ones(1))
+        # self.scale = nn.Parameter(torch.ones(1))
+        # self.bias2b = nn.Parameter(torch.zeros(1))
         self.downsample = downsample
 
     def forward(self, x):
         identity = x
 
         # out = self.conv1(x + self.bias1a)
-        out = self.conv1(x + self.bias1a)
-        out = self.relu(out * self.scale0 + self.bias1b)
+        out = self.conv1(x)
+        out = self.relu(out )
 
-        out = self.conv2(out + self.bias2a)
-        out = out * self.scale + self.bias2b
+        out = self.conv2(out )
+        # out = out * self.scale + self.bias2b
 
         if self.downsample is not None:
-            identity = self.downsample(x + self.bias1a)
+            identity = self.downsample(x)
             identity = torch.cat((identity, torch.zeros_like(identity)), 1)
 
         out += identity
@@ -59,22 +59,21 @@ class FixupResNet(nn.Module):
         self.num_layers = sum(layers)
         self.inplanes = 16
         self.conv1 = conv3x3(3, 16)
-        self.bias1 = nn.Parameter(torch.zeros(1))
+        # self.bias1 = nn.Parameter(torch.zeros(1))
         self.relu = nn.ReLU(inplace=True)
         self.layer1 = self._make_layer(block, 16, layers[0])
         self.layer2 = self._make_layer(block, 32, layers[1], stride=2)
         self.layer3 = self._make_layer(block, 64, layers[2], stride=2)
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self.bias2 = nn.Parameter(torch.zeros(1))
+        # self.bias2 = nn.Parameter(torch.zeros(1))
         self.fc = nn.Linear(64, num_classes)
 
         for m in self.modules():
             if isinstance(m, FixupBasicBlock):
                 # nn.init.normal_(m.conv1.weight, mean=0, std=np.sqrt(2 / (m.conv1.weight.shape[0] * np.prod(m.conv1.weight.shape[2:]))) * self.num_layers ** (-0.5))
-                # nn.init.constant_(m.conv1.weight, 0)
                 # nn.init.constant_(m.conv2.weight, 0)
-                nn.init.normal_(m.conv1.weight, mean=0, std=1e-3)
-                nn.init.normal_(m.conv2.weight, mean=0, std=1e-3)
+                nn.init.normal_(m.conv1.weight, mean=0, std=1e-2)
+                nn.init.normal_(m.conv2.weight, mean=0, std=1e-2)
             elif isinstance(m, nn.Linear):
                 nn.init.constant_(m.weight, 0)
                 nn.init.constant_(m.bias, 0)
@@ -95,7 +94,8 @@ class FixupResNet(nn.Module):
 
     def forward(self, x):
         x = self.conv1(x)
-        x = self.relu(x + self.bias1)
+        # x = self.relu(x + self.bias1)
+        x = self.relu(x)
 
         x = self.layer1(x)
         x = self.layer2(x)
@@ -103,7 +103,8 @@ class FixupResNet(nn.Module):
 
         x = self.avgpool(x)
         x = x.view(x.size(0), -1)
-        x = self.fc(x + self.bias2)
+        # x = self.fc(x + self.bias2)
+        x = self.fc(x)
 
         return x
 
