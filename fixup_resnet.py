@@ -28,9 +28,7 @@ class BasicBlock(nn.Module):
     def __init__(self, in_planes, planes, stride=1, option='A'):
         super(BasicBlock, self).__init__()
         self.conv1 = nn.Conv2d(in_planes, planes, kernel_size=3, stride=stride, padding=1, bias=False)
-        self.bn1 = nn.BatchNorm2d(planes)
         self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=1, padding=1, bias=False)
-        self.bn2 = nn.BatchNorm2d(planes)
 
         self.shortcut = nn.Sequential()
         if stride != 1 or in_planes != planes:
@@ -47,8 +45,8 @@ class BasicBlock(nn.Module):
                 )
 
     def forward(self, x):
-        out = F.relu(self.bn1(self.conv1(x)))
-        out = self.bn2(self.conv2(out))
+        out = F.relu(self.conv1(x))
+        out = self.conv2(out)
         out += self.shortcut(x)
         out = F.relu(out)
         return out
@@ -100,7 +98,7 @@ class FixupResNet(nn.Module):
                                                     use_adaptivePC=True, pclevel=0)
         else:
             self.conv1 = nn.Conv2d(3, 16, kernel_size=3, stride=1, padding=1, bias=False)
-            self.bn1 = nn.BatchNorm2d(16)
+            # self.bn1 = nn.BatchNorm2d(16)
         self.layer1 = self._make_layer(block, 16, num_blocks[0], stride=1)
         self.layer2 = self._make_layer(block, 32, num_blocks[1], stride=2)
         self.layer3 = self._make_layer(block, 64, num_blocks[2], stride=2)
@@ -123,7 +121,7 @@ class FixupResNet(nn.Module):
         if self.PC:
             out = F.relu(self.conv1(x))
         else:
-            out = F.relu(self.bn1(self.conv1(x)))
+            out = F.relu(self.conv1(x))
         out = self.layer1(out)
         out = self.layer2(out)
         out = self.layer3(out)
@@ -134,42 +132,33 @@ class FixupResNet(nn.Module):
 
 
 def fixup_resnet20(skipconnection=True, PC=False):
-    if PC:
-        if skipconnection:
-            return FixupResNet(BasicPCBlock, [3, 3, 3])
-    else:
-        if skipconnection:
-            return FixupResNet(BasicBlock, [3, 3, 3])
+    # if PC:
+    #     if skipconnection:
+    #         return FixupResNet(BasicPCBlock, [3, 3, 3])
+    # else:
+    #     if skipconnection:
+    return FixupResNet(BasicBlock, [3, 3, 3])
         
 
 def fixup_resnet32(skipconnection=True, PC=False):
-    if PC:
-        if skipconnection:
-            return FixupResNet(BasicPCBlock, [5, 5, 5])
-    else:
-        if skipconnection:
-            return FixupResNet(BasicBlock, [5, 5, 5])
+    # if PC:
+    #     if skipconnection:
+    #         return FixupResNet(BasicPCBlock, [5, 5, 5])
+    # else:
+    #     if skipconnection:
+    return FixupResNet(BasicBlock, [5, 5, 5])
         
 
 def fixup_resnet44():
+    print("here")
     return FixupResNet(BasicBlock, [7, 7, 7])
 
 def fixup_resnet56(skipconnection=True, PC=False):
-    if PC:
-        if skipconnection:
-            return FixupResNet(BasicPCBlock, [9, 9, 9], PC=True)
-    else:
-        if skipconnection:
-            return FixupResNet(BasicBlock, [9, 9, 9])
+    return FixupResNet(BasicBlock, [9, 9, 9])
         
 
 def fixup_resnet110(skipconnection=True, PC=False):
-    if PC:
-        if skipconnection:
-            return FixupResNet(BasicPCBlock, [18, 18, 18], PC=True)
-    else:
-        if skipconnection:
-            return FixupResNet(BasicBlock, [18, 18, 18])
+    return FixupResNet(BasicBlock, [18, 18, 18])
 
 def fixup_resnet1202(skipconnection=True, PC=False):
     if PC:
