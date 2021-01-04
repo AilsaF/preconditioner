@@ -39,7 +39,7 @@ if 1:
 
     netG, _ = hignorm_networks.getGD('resnet', db, 256, 256, dim_z=h_dim, image_size=img_size, ignoreD=True)
     folder = 'ie510result/cifar_structresnet_GfeatureNum256_DfeatureNum256_losshinge'
-    exp_ = 'vanilla_CIFAR_size32_dlr0.0002_glr0.0002_diter5_giter1_b10.5_b20.999_Gnumfea256_Dnumfea256_batchsize64_useadappolarTrueiter0Donly2block'
+    exp_ = 'vanilla_CIFAR_size32_dlr0.0002_glr0.0002_diter5_giter1_b10.5_b20.999_Gnumfea256_Dnumfea256_batchsize64_useadappolarFalseiter0Donly2block'
     end = 100000
     start = 1000
     gap = 2000
