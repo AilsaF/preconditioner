@@ -12,7 +12,7 @@ def conv3x3(in_planes, out_planes, stride=1):
     return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
                      padding=1, bias=False)
     # return Higham_norm.spectral_norm(nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
-    #                  padding=1, bias=False),use_adaptivePC=False, pclevel=1)
+    #                  padding=1, bias=False),use_adaptivePC=False, pclevel=2)
 
 
 class FixupBasicBlock(nn.Module):
@@ -71,8 +71,10 @@ class FixupResNet(nn.Module):
             if isinstance(m, FixupBasicBlock):
                 # nn.init.normal_(m.conv1.weight, mean=0, std=np.sqrt(2 / (m.conv1.weight.shape[0] * np.prod(m.conv1.weight.shape[2:]))) * self.num_layers ** (-0.5))
                 # nn.init.constant_(m.conv2.weight, 0)
-                nn.init.normal_(m.conv1.weight, mean=0, std=1e-3)
-                nn.init.normal_(m.conv2.weight, mean=0, std=1e-3)
+                # nn.init.normal_(m.conv1.weight, mean=0, std=1e-3)
+                # nn.init.normal_(m.conv2.weight, mean=0, std=1e-3)
+                nn.init.xavier_normal_(m.conv1.weight, gain=1e-1)
+                nn.init.xavier_normal_(m.conv2.weight, gain=1e-1)
             elif isinstance(m, nn.Linear):
                 nn.init.constant_(m.weight, 0)
                 nn.init.constant_(m.bias, 0)

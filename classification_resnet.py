@@ -75,7 +75,8 @@ def main():
 
 
     # Check the save_dir exists or not
-    args.save_dir = "cifar_{}_lr{}_cosine_ordnn_fixup_withscalar".format(args.arch, args.lr)
+    # args.save_dir = "test_ignore" 
+    args.save_dir = "cifar_{}_lr{}_cosine_ordnn_fixup_withscalar_initxavier_normal_0.1".format(args.arch, args.lr)
     if not os.path.exists(args.save_dir):
         os.makedirs(args.save_dir)
 
@@ -175,8 +176,8 @@ def main():
             save_checkpoint({
                 'epoch': epoch + 1,
                 'state_dict': model.state_dict(),
-                'best_prec1': best_prec1,
-            }, is_best, filename=os.path.join(args.save_dir, 'checkpoint.th'))
+                'cur_prec1': prec1,
+            }, True, filename=os.path.join(args.save_dir, 'checkpoint.th'))
 
         save_checkpoint({
             'state_dict': model.state_dict(),
@@ -292,7 +293,8 @@ def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
     """
     Save the training model
     """
-    torch.save(state, filename)
+    if is_best:
+        torch.save(state, filename)
 
 class AverageMeter(object):
     """Computes and stores the average and current value"""

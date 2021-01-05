@@ -114,7 +114,7 @@ class SpectralNorm(object):
         # ============================================
         #             Adaptive Preconditioner
         # ============================================
-        if self.use_adaptivePC and (self.called_time//self.diter) % 3000 == 0:
+        if self.use_adaptivePC and (self.called_time//self.diter) % 500 == 0:
             if len(weight.shape) > 2:
                 weight_mat = weight.detach().view(weight.shape[0], -1)
                 S = torch.svd(weight_mat)[1]
@@ -126,12 +126,12 @@ class SpectralNorm(object):
                     pcleval.data = torch.tensor(0)
                 elif 5 < recent_cn_avg <= 10:
                     pcleval.data = torch.tensor(1)
-                elif 10 < recent_cn_avg <= 20:
+                elif 10 < recent_cn_avg: #<= 20:
                     pcleval.data = torch.tensor(2)
-                elif 20 < recent_cn_avg <= 30:
-                    pcleval.data = torch.tensor(3)
-                else:
-                    pcleval.data = torch.tensor(4)
+                # elif 20 < recent_cn_avg <= 30:
+                #     pcleval.data = torch.tensor(3)
+                # else:
+                #     pcleval.data = torch.tensor(4)
                 self.pclevel = pcleval.item()
                 print("CNs are {}, change preconditioner iteration to {}".format(cns, self.pclevel))
         self.called_time += 1
