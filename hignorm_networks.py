@@ -558,7 +558,7 @@ class DeepResNetProjectionDiscriminator32(nn.Module):
                                 use_adaptivePC=use_adaptivePC, pclevel=pclevel, diter=diter)
         self.block3 = DeepDiscBlock(num_features, num_features, activation=self.activation, downsample=False,
                                 use_adaptivePC=use_adaptivePC, pclevel=pclevel, diter=diter)
-        self.block4 = DeepDiscBlock(num_features, num_features, activation=self.activation, downsample=True,
+        self.block4 = DeepDiscBlock(num_features, num_features, activation=self.activation, downsample=False,
                                 use_adaptivePC=use_adaptivePC, pclevel=pclevel, diter=diter)
 
         self.proj = Higham_norm.spectral_norm(nn.Linear(num_features, 1, bias=False), use_adaptivePC=use_adaptivePC,
