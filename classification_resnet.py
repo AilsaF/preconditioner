@@ -4,6 +4,9 @@ import shutil
 import time
 import math
 import random
+# import matplotlib
+# matplotlib.use('Agg')
+# import matplotlib.pyplot as plt
 
 import numpy as np
 import torch
@@ -14,20 +17,19 @@ import torch.optim
 import torch.utils.data
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
-# import resnet
+import resnet
 import fixup_resnet
 from torch.optim.lr_scheduler import CosineAnnealingLR
 
 
-# model_names = sorted(name for name in resnet.__dict__
-#     if name.islower() and not name.startswith("__")
-#                      and name.startswith("resnet")
-#                      and callable(resnet.__dict__[name]))
-model_names = sorted(name for name in fixup_resnet.__dict__
+model_names = sorted(name for name in resnet.__dict__
+    if name.islower() and not name.startswith("__")
+                     and name.startswith("resnet")
+                     and callable(resnet.__dict__[name]))
+model_names += sorted(name for name in fixup_resnet.__dict__
     if name.islower() and not name.startswith("__")
     and name.startswith("fixup_resnet")
     and callable(fixup_resnet.__dict__[name]))
-
 print(model_names)
 
 parser = argparse.ArgumentParser(description='Propert ResNets for CIFAR10 in pytorch')
@@ -66,35 +68,44 @@ parser.add_argument('--save-every', dest='save_every',
                     help='Saves checkpoints at every specified number of epochs',
                     type=int, default=10)
 parser.add_argument('--seed', default=0, type=int, help='seed')
-parser.add_argument('--PC', help='Use PC ', action='store_true')
+parser.add_argument('--PC', default=0, type=int, help='seed')
 parser.add_argument('--skip', help='Use skipconnection', action='store_true')
 parser.add_argument('--beta', default=1.0, type=float, help='beta for cutmix')
-parser.add_argument('--cutmix_prob', default=0.5, type=float, help='cutmix probability')
+parser.add_argument('--cutmix_prob', default=0, type=float, help='cutmix probability')
 
 best_prec1 = 0
 
 args = parser.parse_args()
+# Check the save_dir exists or not
+# args.save_dir = "test_ignore" 
+args.save_dir = "cifar10_classifiction_results/cifar_{}_pc{}_lr{}_bs{}_epoch{}_cutmixprob{}_cosine_noBN_withscalar_init_ortho_0.1_seed{}".format(
+    args.arch, args.PC, args.lr, args.batch_size, args.epochs, args.cutmix_prob, args.seed)
+if not os.path.exists(args.save_dir):
+    os.makedirs(args.save_dir)
+file = open("{}/log.txt".format(args.save_dir),"w+") 
+file.write(args.arch + '\n')
+
 random.seed(args.seed)
 np.random.seed(args.seed)
 torch.manual_seed(args.seed)
 torch.cuda.manual_seed_all(args.seed)
 
+train_accuracy = []
+val_accuracy = []
 
 def main():
-    global best_prec1#, args
-
-    # Check the save_dir exists or not
-    args.save_dir = "test_ignore" 
-    # args.save_dir = "cifar_{}_lr{}_cosine_apc_fixup_withscalar_init_ortho_0.1".format(args.arch, args.lr)
-    if not os.path.exists(args.save_dir):
-        os.makedirs(args.save_dir)
+    global best_prec1
 
     # model = torch.nn.DataParallel(resnet.__dict__[args.arch](skipconnection=args.skip, PC=args.PC))
     # model = resnet.__dict__[args.arch]()
-    model = torch.nn.DataParallel(fixup_resnet.__dict__[args.arch]())
+    if 'fixup' in args.arch:
+        model = fixup_resnet.__dict__[args.arch](PC=args.PC)
+    else:
+        model = resnet.__dict__[args.arch](PC=args.PC)
     model.cuda()
     # model.apply(init_ortho_weights)
-    print(model)
+    file.write(str(model))
+    file.write("\n")
 
     # optionally resume from a checkpoint
     if args.resume:
@@ -146,9 +157,9 @@ def main():
     parameters_scale = [p[1] for p in model.named_parameters() if 'scale' in p[0]]
     parameters_others = [p[1] for p in model.named_parameters() if not ('bias' in p[0] or 'scale' in p[0])]
     optimizer = torch.optim.SGD(
-            [{'params': parameters_bias, 'lr': args.lr/10.}, 
-            {'params': parameters_scale, 'lr': args.lr/10.}, 
-            {'params': parameters_others}], 
+            [{'params': parameters_others},
+            {'params': parameters_bias, 'lr': args.lr/10.}, 
+            {'params': parameters_scale, 'lr': args.lr/10.}], 
             lr=args.lr, 
             momentum=0.9, 
             weight_decay=args.weight_decay)
@@ -170,7 +181,7 @@ def main():
     for epoch in range(args.start_epoch, args.epochs):
 
         # train for one epoch
-        print('current lr {:.5e}'.format(optimizer.param_groups[0]['lr']))
+        file.write('current lr {:.5e}\n'.format(optimizer.param_groups[0]['lr']))
         train(train_loader, model, criterion, optimizer, epoch)
         lr_scheduler.step()
 
@@ -192,6 +203,8 @@ def main():
             'state_dict': model.state_dict(),
             'best_prec1': best_prec1,
         }, is_best, filename=os.path.join(args.save_dir, 'model.th'))
+    
+    file.close()
 
 
 def train(train_loader, model, criterion, optimizer, epoch):
@@ -244,6 +257,7 @@ def train(train_loader, model, criterion, optimizer, epoch):
 
         output = output.float()
         loss = loss.float()
+
         # measure accuracy and record loss
         prec1 = accuracy(output.data, target)[0]
         losses.update(loss.item(), input.size(0))
@@ -254,13 +268,15 @@ def train(train_loader, model, criterion, optimizer, epoch):
         end = time.time()
 
         if i % args.print_freq == 0:
-            print('Epoch: [{0}][{1}/{2}]\t'
+            file.write('Epoch: [{0}][{1}/{2}]\t'
                   'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
                   'Data {data_time.val:.3f} ({data_time.avg:.3f})\t'
                   'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
-                  'Prec@1 {top1.val:.3f} ({top1.avg:.3f})'.format(
+                  'Prec@1 {top1.val:.3f} ({top1.avg:.3f})\n'.format(
                       epoch, i, len(train_loader), batch_time=batch_time,
                       data_time=data_time, loss=losses, top1=top1))
+    train_accuracy.append(top1.avg)
+    np.save('{}/train_accuracy.npy'.format(args.save_dir), train_accuracy)
 
 
 def validate(val_loader, model, criterion):
@@ -301,16 +317,16 @@ def validate(val_loader, model, criterion):
             end = time.time()
 
             if i % args.print_freq == 0:
-                print('Test: [{0}/{1}]\t'
+                file.write('Test: [{0}/{1}]\t'
                       'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
                       'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
-                      'Prec@1 {top1.val:.3f} ({top1.avg:.3f})'.format(
+                      'Prec@1 {top1.val:.3f} ({top1.avg:.3f})\n'.format(
                           i, len(val_loader), batch_time=batch_time, loss=losses,
                           top1=top1))
 
-    print(' * Prec@1 {top1.avg:.3f}'
-          .format(top1=top1))
-
+    file.write(' * Prec@1 {top1.avg:.3f}\n'.format(top1=top1))
+    val_accuracy.append(top1.avg)
+    np.save('{}/val_accuracy.npy'.format(args.save_dir), val_accuracy)
     return top1.avg
 
 def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
