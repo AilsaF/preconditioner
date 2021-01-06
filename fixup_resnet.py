@@ -9,10 +9,10 @@ __all__ = ['FixupResNet', 'fixup_resnet20', 'fixup_resnet32', 'fixup_resnet44', 
 
 def conv3x3(in_planes, out_planes, stride=1):
     """3x3 convolution with padding"""
-    return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
-                     padding=1, bias=False)
-    # return Higham_norm.spectral_norm(nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
-    #                  padding=1, bias=False),use_adaptivePC=False, pclevel=2)
+    # return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
+    #                  padding=1, bias=False)
+    return Higham_norm.spectral_norm(nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
+                     padding=1, bias=False),use_adaptivePC=False, pclevel=1)
 
 
 class FixupBasicBlock(nn.Module):
@@ -21,28 +21,32 @@ class FixupBasicBlock(nn.Module):
     def __init__(self, inplanes, planes, stride=1, downsample=None):
         super(FixupBasicBlock, self).__init__()
         # Both self.conv1 and self.downsample layers downsample the input when stride != 1
-        self.bias1a = nn.Parameter(torch.zeros(1))
+        # self.bias1a = nn.Parameter(torch.zeros(1))
         self.conv1 = conv3x3(inplanes, planes, stride)
-        self.bias1b = nn.Parameter(torch.zeros(1))
+        # self.bias1b = nn.Parameter(torch.zeros(1))
         self.relu = nn.ReLU(inplace=True)
-        self.bias2a = nn.Parameter(torch.zeros(1))
+        # self.bias2a = nn.Parameter(torch.zeros(1))
         self.conv2 = conv3x3(planes, planes)
         self.scale0 = nn.Parameter(torch.ones(1))
         self.scale = nn.Parameter(torch.ones(1))
-        self.bias2b = nn.Parameter(torch.zeros(1))
+        # self.bias2b = nn.Parameter(torch.zeros(1))
         self.downsample = downsample
 
     def forward(self, x):
         identity = x
 
-        out = self.conv1(x + self.bias1a)
-        out = self.relu(out * self.scale0 + self.bias1b)
+        # out = self.conv1(x + self.bias1a)
+        # out = self.relu(out * self.scale0 + self.bias1b)
+        out = self.conv1(x * self.scale0)
+        out = self.relu(out)
 
-        out = self.conv2(out + self.bias2a)
-        out = out * self.scale + self.bias2b
+        # out = self.conv2(out + self.bias2a)
+        # out = out * self.scale + self.bias2b
+        out = self.conv2(out * self.scale)
 
         if self.downsample is not None:
-            identity = self.downsample(x + self.bias1a)
+            # identity = self.downsample(x + self.bias1a)
+            identity = self.downsample(x)
             identity = torch.cat((identity, torch.zeros_like(identity)), 1)
 
         out += identity
@@ -73,11 +77,15 @@ class FixupResNet(nn.Module):
                 # nn.init.constant_(m.conv2.weight, 0)
                 # nn.init.normal_(m.conv1.weight, mean=0, std=1e-3)
                 # nn.init.normal_(m.conv2.weight, mean=0, std=1e-3)
-                nn.init.xavier_normal_(m.conv1.weight, gain=1e-1)
-                nn.init.xavier_normal_(m.conv2.weight, gain=1e-1)
+                # nn.init.xavier_normal_(m.conv1.weight, gain=1e-1)
+                # nn.init.xavier_normal_(m.conv2.weight, gain=1e-1)
+                nn.init.orthogonal_(m.conv1.weight, gain=1e-1)
+                nn.init.orthogonal_(m.conv2.weight, gain=1e-1)
             elif isinstance(m, nn.Linear):
                 nn.init.constant_(m.weight, 0)
                 nn.init.constant_(m.bias, 0)
+            elif isinstance(m, nn.Conv2d):
+                nn.init.orthogonal_(m.weight, gain=1e-1)
             
 
     def _make_layer(self, block, planes, blocks, stride=1):
@@ -153,4 +161,4 @@ def fixup_resnet1202(**kwargs):
 
     """
     model = FixupResNet(FixupBasicBlock, [200, 200, 200], **kwargs)
-    return model    
+    return model  

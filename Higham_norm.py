@@ -126,12 +126,12 @@ class SpectralNorm(object):
                     pcleval.data = torch.tensor(0)
                 elif 5 < recent_cn_avg <= 10:
                     pcleval.data = torch.tensor(1)
-                elif 10 < recent_cn_avg: #<= 20:
+                elif 10 < recent_cn_avg <= 20:
                     pcleval.data = torch.tensor(2)
-                # elif 20 < recent_cn_avg <= 30:
-                #     pcleval.data = torch.tensor(3)
-                # else:
-                #     pcleval.data = torch.tensor(4)
+                elif 20 < recent_cn_avg <= 30:
+                    pcleval.data = torch.tensor(3)
+                else:
+                    pcleval.data = torch.tensor(4)
                 self.pclevel = pcleval.item()
                 print("CNs are {}, change preconditioner iteration to {}".format(cns, self.pclevel))
         self.called_time += 1

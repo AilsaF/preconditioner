@@ -3,7 +3,9 @@ import os
 import shutil
 import time
 import math
+import random
 
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.parallel
@@ -63,26 +65,33 @@ parser.add_argument('--save-dir', dest='save_dir',
 parser.add_argument('--save-every', dest='save_every',
                     help='Saves checkpoints at every specified number of epochs',
                     type=int, default=10)
+parser.add_argument('--seed', default=0, type=int, help='seed')
 parser.add_argument('--PC', help='Use PC ', action='store_true')
 parser.add_argument('--skip', help='Use skipconnection', action='store_true')
+parser.add_argument('--beta', default=1.0, type=float, help='beta for cutmix')
+parser.add_argument('--cutmix_prob', default=0.5, type=float, help='cutmix probability')
 
 best_prec1 = 0
 
+args = parser.parse_args()
+random.seed(args.seed)
+np.random.seed(args.seed)
+torch.manual_seed(args.seed)
+torch.cuda.manual_seed_all(args.seed)
+
 
 def main():
-    global args, best_prec1
-    args = parser.parse_args()
-
+    global best_prec1#, args
 
     # Check the save_dir exists or not
-    # args.save_dir = "test_ignore" 
-    args.save_dir = "cifar_{}_lr{}_cosine_ordnn_fixup_withscalar_initxavier_normal_0.1".format(args.arch, args.lr)
+    args.save_dir = "test_ignore" 
+    # args.save_dir = "cifar_{}_lr{}_cosine_apc_fixup_withscalar_init_ortho_0.1".format(args.arch, args.lr)
     if not os.path.exists(args.save_dir):
         os.makedirs(args.save_dir)
 
     # model = torch.nn.DataParallel(resnet.__dict__[args.arch](skipconnection=args.skip, PC=args.PC))
     # model = resnet.__dict__[args.arch]()
-    model = fixup_resnet.__dict__[args.arch]()
+    model = torch.nn.DataParallel(fixup_resnet.__dict__[args.arch]())
     model.cuda()
     # model.apply(init_ortho_weights)
     print(model)
@@ -210,8 +219,23 @@ def train(train_loader, model, criterion, optimizer, epoch):
             input_var = input_var.half()
 
         # compute output
-        output = model(input_var)
-        loss = criterion(output, target_var)
+        r = np.random.rand(1)
+        if args.beta > 0 and r < args.cutmix_prob:
+            # generate mixed sample
+            lam = np.random.beta(args.beta, args.beta)
+            rand_index = torch.randperm(input_var.size()[0]).cuda()
+            target_a = target_var
+            target_b = target_var[rand_index]
+            bbx1, bby1, bbx2, bby2 = rand_bbox(input_var.size(), lam)
+            input_var[:, :, bbx1:bbx2, bby1:bby2] = input_var[rand_index, :, bbx1:bbx2, bby1:bby2]
+            # adjust lambda to exactly match pixel ratio
+            lam = 1 - ((bbx2 - bbx1) * (bby2 - bby1) / (input_var.size()[-1] * input_var.size()[-2]))
+            # compute output
+            output = model(input_var)
+            loss = criterion(output, target_a) * lam + criterion(output, target_b) * (1. - lam)
+        else:
+            output = model(input_var)
+            loss = criterion(output, target_var)
 
         # compute gradient and do SGD step
         optimizer.zero_grad()
@@ -339,6 +363,24 @@ def init_ortho_weights(m):
     if type(m) == nn.Linear:
         nn.init.constant_(m.weight, 0)
         nn.init.constant_(m.bias, 0)
+
+def rand_bbox(size, lam):
+    W = size[2]
+    H = size[3]
+    cut_rat = np.sqrt(1. - lam)
+    cut_w = np.int(W * cut_rat)
+    cut_h = np.int(H * cut_rat)
+
+    # uniform
+    cx = np.random.randint(W)
+    cy = np.random.randint(H)
+
+    bbx1 = np.clip(cx - cut_w // 2, 0, W)
+    bby1 = np.clip(cy - cut_h // 2, 0, H)
+    bbx2 = np.clip(cx + cut_w // 2, 0, W)
+    bby2 = np.clip(cy + cut_h // 2, 0, H)
+
+    return bbx1, bby1, bbx2, bby2
 
 
 
