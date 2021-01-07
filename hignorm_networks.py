@@ -530,16 +530,16 @@ class DeepResNetGenerator32(nn.Module):
         self.block4 = DeepGenBlock(num_features, num_features,
                             activation=activation, upsample=True,
                             num_classes=num_classes)  
-        # self.block5 = DeepGenBlock(num_features, num_features,
-        #                     activation=activation, upsample=False,
-        #                     num_classes=num_classes)                 
+        self.block5 = DeepGenBlock(num_features, num_features,
+                            activation=activation, upsample=False,
+                            num_classes=num_classes)                 
         
         self.b5 = nn.BatchNorm2d(num_features)
         self.conv5 = nn.Conv2d(num_features, channel, 1, 1)  # (_, 3, 32, 32)
 
     def forward(self, z, y=None, **kwargs):
         h = self.l1(z).view(z.size(0), -1, self.bottom_width, self.bottom_width)
-        for i in range(2, 5):
+        for i in range(2, 6):
             h = getattr(self, 'block{}'.format(i))(h, y, **kwargs)
         h = self.activation(self.b5(h))
         return torch.tanh(self.conv5(h))
