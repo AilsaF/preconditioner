@@ -80,16 +80,16 @@ class FixupResNet(nn.Module):
                 # nn.init.constant_(m.conv2.weight, 0)
                 # nn.init.normal_(m.conv1.weight, mean=0, std=1e-3)
                 # nn.init.normal_(m.conv2.weight, mean=0, std=1e-3)
-                nn.init.xavier_normal_(m.conv1.weight, gain=1e-1)
-                nn.init.xavier_normal_(m.conv2.weight, gain=1e-1)
-                # nn.init.orthogonal_(m.conv1.weight, gain=1e-1)
-                # nn.init.orthogonal_(m.conv2.weight, gain=1e-1)
+                # nn.init.xavier_normal_(m.conv1.weight, gain=1e-1)
+                # nn.init.xavier_normal_(m.conv2.weight, gain=1e-1)
+                nn.init.orthogonal_(m.conv1.weight, gain=1e-1)
+                nn.init.orthogonal_(m.conv2.weight, gain=1e-1)
             elif isinstance(m, nn.Linear):
                 nn.init.constant_(m.weight, 0)
                 nn.init.constant_(m.bias, 0)
-            elif isinstance(m, nn.Conv2d):
-                # nn.init.orthogonal_(m.weight, gain=1e-1)
-                nn.init.xavier_normal_(m.weight, gain=1e-1)
+            # elif isinstance(m, nn.Conv2d):
+            #     nn.init.orthogonal_(m.weight, gain=1e-1)
+                # nn.init.xavier_normal_(m.weight, gain=1e-1)
             
 
     def _make_layer(self, block, planes, blocks, stride=1, PC=0):
