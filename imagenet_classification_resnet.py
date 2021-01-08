@@ -172,9 +172,20 @@ def main_worker(gpu, ngpus_per_node, args):
     # define loss function (criterion) and optimizer
     criterion = nn.CrossEntropyLoss().cuda(args.gpu)
 
-    optimizer = torch.optim.SGD(model.parameters(), args.lr,
-                                momentum=args.momentum,
-                                weight_decay=args.weight_decay)
+    # optimizer = torch.optim.SGD(model.parameters(), args.lr,
+    #                             momentum=args.momentum,
+    #                             weight_decay=args.weight_decay)
+    parameters_bias = [p[1] for p in model.named_parameters() if 'bias' in p[0]]
+    parameters_scale = [p[1] for p in model.named_parameters() if 'scale' in p[0]]
+    parameters_others = [p[1] for p in model.named_parameters() if not ('bias' in p[0] or 'scale' in p[0])]
+    optimizer = torch.optim.SGD(
+        [{'params': parameters_others},
+        {'params': parameters_bias, 'lr': args.base_lr/10.},
+        {'params': parameters_scale, 'lr': args.base_lr/10.}],
+        lr=args.lr, #base_learning_rate,
+        momentum=args.momentum,
+        weight_decay=args.weight_decay)
+
 
     # optionally resume from a checkpoint
     if args.resume:
