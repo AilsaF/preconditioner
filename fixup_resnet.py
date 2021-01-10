@@ -9,13 +9,12 @@ __all__ = ['FixupResNet', 'fixup_resnet20', 'fixup_resnet32', 'fixup_resnet44', 
 
 def conv3x3(in_planes, out_planes, stride=1, PC=0):
     """3x3 convolution with padding"""
-    if PC:
-        return Higham_norm.spectral_norm(nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
-                     padding=1, bias=False),use_adaptivePC=False, pclevel=PC)
-    else:
+    if PC == 0:
         return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
                      padding=1, bias=False)
-    
+    else:
+        return Higham_norm.spectral_norm(nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
+                     padding=1, bias=False), use_adaptivePC=False, pclevel=PC)
 
 
 class FixupBasicBlock(nn.Module):
@@ -26,12 +25,11 @@ class FixupBasicBlock(nn.Module):
         # Both self.conv1 and self.downsample layers downsample the input when stride != 1
         self.bias1a = nn.Parameter(torch.zeros(1))
         self.conv1 = conv3x3(inplanes, planes, stride, PC=PC)
-        self.scale1 = nn.Parameter(torch.ones(1))
         self.bias1b = nn.Parameter(torch.zeros(1))
         self.relu = nn.ReLU(inplace=True)
         self.bias2a = nn.Parameter(torch.zeros(1))
         self.conv2 = conv3x3(planes, planes, PC=PC)
-        self.scale2 = nn.Parameter(torch.ones(1))
+        self.scale = nn.Parameter(torch.ones(1))
         self.bias2b = nn.Parameter(torch.zeros(1))
         self.downsample = downsample
 
@@ -39,17 +37,13 @@ class FixupBasicBlock(nn.Module):
         identity = x
 
         out = self.conv1(x + self.bias1a)
-        out = self.relu(out * self.scale1 + self.bias1b)
-        # out = self.conv1(x * self.scale0)
-        # out = self.relu(out)
+        out = self.relu(out + self.bias1b)
 
         out = self.conv2(out + self.bias2a)
-        out = out * self.scale2 + self.bias2b
-        # out = self.conv2(out * self.scale)
+        out = out * self.scale + self.bias2b
 
         if self.downsample is not None:
             identity = self.downsample(x + self.bias1a)
-            # identity = self.downsample(x)
             identity = torch.cat((identity, torch.zeros_like(identity)), 1)
 
         out += identity
@@ -72,25 +66,20 @@ class FixupResNet(nn.Module):
         self.layer3 = self._make_layer(block, 64, layers[2], stride=2, PC=PC)
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         self.bias2 = nn.Parameter(torch.zeros(1))
-        self.fc = nn.Linear(64, num_classes)
+        if PC == 0:
+            self.fc = nn.Linear(64, num_classes)
+        else:
+            self.fc = Higham_norm.spectral_norm(nn.Linear(64, num_classes), use_adaptivePC=False, pclevel=PC)
 
         for m in self.modules():
             if isinstance(m, FixupBasicBlock):
-                # nn.init.normal_(m.conv1.weight, mean=0, std=np.sqrt(2 / (m.conv1.weight.shape[0] * np.prod(m.conv1.weight.shape[2:]))) * self.num_layers ** (-0.5))
+                nn.init.normal_(m.conv1.weight, mean=0, std=np.sqrt(2. / (m.conv1.weight.shape[0] * np.prod(m.conv1.weight.shape[2:]))) * self.num_layers ** (-0.5))
                 # nn.init.constant_(m.conv2.weight, 0)
-                # nn.init.normal_(m.conv1.weight, mean=0, std=1e-3)
-                # nn.init.normal_(m.conv2.weight, mean=0, std=1e-3)
-                # nn.init.xavier_normal_(m.conv1.weight, gain=1e-1)
-                # nn.init.xavier_normal_(m.conv2.weight, gain=1e-1)
-                nn.init.orthogonal_(m.conv1.weight, gain=1e-1)
-                nn.init.orthogonal_(m.conv2.weight, gain=1e-1)
+                nn.init.normal_(m.conv2.weight, mean=0, std=np.sqrt(2. / (m.conv1.weight.shape[0] * np.prod(m.conv1.weight.shape[2:]))) * self.num_layers ** (-0.5))
             elif isinstance(m, nn.Linear):
-                nn.init.constant_(m.weight, 0)
+                # nn.init.constant_(m.weight, 0)
+                nn.init.normal_(m.weight, mean=0, std=np.sqrt(2. / m.weight.shape[0]) * self.num_layers ** (-0.5))
                 nn.init.constant_(m.bias, 0)
-            # elif isinstance(m, nn.Conv2d):
-            #     nn.init.orthogonal_(m.weight, gain=1e-1)
-                # nn.init.xavier_normal_(m.weight, gain=1e-1)
-            
 
     def _make_layer(self, block, planes, blocks, stride=1, PC=0):
         downsample = None
@@ -165,4 +154,4 @@ def fixup_resnet1202(**kwargs):
 
     """
     model = FixupResNet(FixupBasicBlock, [200, 200, 200], **kwargs)
-    return model  
+    return model

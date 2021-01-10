@@ -69,7 +69,6 @@ parser.add_argument('--save-every', dest='save_every',
                     type=int, default=10)
 parser.add_argument('--seed', default=0, type=int, help='seed')
 parser.add_argument('--PC', default=0, type=int, help='seed')
-parser.add_argument('--skip', help='Use skipconnection', action='store_true')
 parser.add_argument('--beta', default=1.0, type=float, help='beta for cutmix')
 parser.add_argument('--cutmix_prob', default=0, type=float, help='cutmix probability')
 
@@ -78,7 +77,7 @@ best_prec1 = 0
 args = parser.parse_args()
 # Check the save_dir exists or not
 # args.save_dir = "test_ignore" 
-args.save_dir = "cifar10_classifiction_results/cifar_{}_pc{}_lr{}_bs{}_epoch{}_cutmixprob{}_cosine_noBN_withscalar_init_ortho_0.1_seed{}".format(
+args.save_dir = "cifar10_classifiction_results/cifar_{}_pc{}_lr{}_bs{}_epoch{}_cutmixprob{}_cosine_noBN_withscalar_init_fixup_seed{}".format(
     args.arch, args.PC, args.lr, args.batch_size, args.epochs, args.cutmix_prob, args.seed)
 if not os.path.exists(args.save_dir):
     os.makedirs(args.save_dir)
@@ -127,7 +126,7 @@ def main():
                                      std=[0.229, 0.224, 0.225])
 
     train_loader = torch.utils.data.DataLoader(
-        datasets.CIFAR10(root='/home/illini/rsgan/DATA/cifar10/', train=True, transform=transforms.Compose([
+        datasets.CIFAR10(root='/data01/tf6/DATA/cifar10/', train=True, transform=transforms.Compose([
             transforms.RandomHorizontalFlip(),
             transforms.RandomCrop(32, 4),
             transforms.ToTensor(),
@@ -137,7 +136,7 @@ def main():
         num_workers=args.workers)
 
     val_loader = torch.utils.data.DataLoader(
-        datasets.CIFAR10(root='/home/illini/rsgan/DATA/cifar10/', train=False, transform=transforms.Compose([
+        datasets.CIFAR10(root='/data01/tf6/DATA/cifar10/', train=False, transform=transforms.Compose([
             transforms.ToTensor(),
             normalize,
         ])),

@@ -126,28 +126,28 @@ class FixupResNet(nn.Module):
         self.fc = nn.Linear(512 * block.expansion, num_classes)
 
         for m in self.modules():
-            # if isinstance(m, FixupBasicBlock):
-            #     nn.init.normal_(m.conv1.weight, mean=0, std=np.sqrt(2 / (m.conv1.weight.shape[0] * np.prod(m.conv1.weight.shape[2:]))) * self.num_layers ** (-0.5))
-            #     nn.init.constant_(m.conv2.weight, 0)
-            #     if m.downsample is not None:
-            #         nn.init.normal_(m.downsample.weight, mean=0, std=np.sqrt(2 / (m.downsample.weight.shape[0] * np.prod(m.downsample.weight.shape[2:]))))
-            # elif isinstance(m, FixupBottleneck):
-            #     nn.init.normal_(m.conv1.weight, mean=0, std=np.sqrt(2 / (m.conv1.weight.shape[0] * np.prod(m.conv1.weight.shape[2:]))) * self.num_layers ** (-0.25))
-            #     nn.init.normal_(m.conv2.weight, mean=0, std=np.sqrt(2 / (m.conv2.weight.shape[0] * np.prod(m.conv2.weight.shape[2:]))) * self.num_layers ** (-0.25))
-            #     nn.init.constant_(m.conv3.weight, 0)
-            #     if m.downsample is not None:
-            #         nn.init.normal_(m.downsample.weight, mean=0, std=np.sqrt(2 / (m.downsample.weight.shape[0] * np.prod(m.downsample.weight.shape[2:]))))
-            if isinstance(m, FixupBasicBlock) or isinstance(m, FixupBottleneck):
-                # nn.init.normal_(m.conv1.weight, mean=0, std=np.sqrt(2 / (m.conv1.weight.shape[0] * np.prod(m.conv1.weight.shape[2:]))) * self.num_layers ** (-0.5))
-                # nn.init.constant_(m.conv2.weight, 0)
-                # nn.init.normal_(m.conv1.weight, mean=0, std=1e-3)
-                # nn.init.normal_(m.conv2.weight, mean=0, std=1e-3)
-                nn.init.xavier_normal_(m.conv1.weight, gain=1e-1)
-                nn.init.xavier_normal_(m.conv2.weight, gain=1e-1)
+            if isinstance(m, FixupBasicBlock):
+                nn.init.normal_(m.conv1.weight, mean=0, std=np.sqrt(2. / (m.conv1.weight.shape[0] * np.prod(m.conv1.weight.shape[2:]))) * self.num_layers ** (-0.5))
+                nn.init.constant_(m.conv2.weight, 0)
                 if m.downsample is not None:
-                    nn.init.xavier_normal_(m.downsample.weight, gain=1e-1)
-                # nn.init.orthogonal_(m.conv1.weight, gain=1e-1)
-                # nn.init.orthogonal_(m.conv2.weight, gain=1e-1)
+                    nn.init.normal_(m.downsample.weight, mean=0, std=np.sqrt(2. / (m.downsample.weight.shape[0] * np.prod(m.downsample.weight.shape[2:]))))
+            elif isinstance(m, FixupBottleneck):
+                nn.init.normal_(m.conv1.weight, mean=0, std=np.sqrt(2. / (m.conv1.weight.shape[0] * np.prod(m.conv1.weight.shape[2:]))) * self.num_layers ** (-0.25))
+                nn.init.normal_(m.conv2.weight, mean=0, std=np.sqrt(2. / (m.conv2.weight.shape[0] * np.prod(m.conv2.weight.shape[2:]))) * self.num_layers ** (-0.25))
+                nn.init.constant_(m.conv3.weight, 0)
+                if m.downsample is not None:
+                    nn.init.normal_(m.downsample.weight, mean=0, std=np.sqrt(2. / (m.downsample.weight.shape[0] * np.prod(m.downsample.weight.shape[2:]))))
+            # if isinstance(m, FixupBasicBlock) or isinstance(m, FixupBottleneck):
+            #     # nn.init.normal_(m.conv1.weight, mean=0, std=np.sqrt(2 / (m.conv1.weight.shape[0] * np.prod(m.conv1.weight.shape[2:]))) * self.num_layers ** (-0.5))
+            #     # nn.init.constant_(m.conv2.weight, 0)
+            #     # nn.init.normal_(m.conv1.weight, mean=0, std=1e-3)
+            #     # nn.init.normal_(m.conv2.weight, mean=0, std=1e-3)
+            #     nn.init.xavier_normal_(m.conv1.weight, gain=1e-1)
+            #     nn.init.xavier_normal_(m.conv2.weight, gain=1e-1)
+            #     if m.downsample is not None:
+            #         nn.init.xavier_normal_(m.downsample.weight, gain=1e-1)
+            #     # nn.init.orthogonal_(m.conv1.weight, gain=1e-1)
+            #     # nn.init.orthogonal_(m.conv2.weight, gain=1e-1)
             elif isinstance(m, nn.Linear):
                 nn.init.constant_(m.weight, 0)
                 nn.init.constant_(m.bias, 0)

@@ -4,6 +4,7 @@ import random
 import shutil
 import time
 import warnings
+import numpy as np
 
 import torch
 import torch.nn as nn
@@ -25,7 +26,7 @@ model_names = sorted(name for name in fixup_resnet_imagenet.__dict__
 print(model_names)
 
 parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
-parser.add_argument('data', default='/data01/tf6/DATA/imagenet', metavar='DIR',
+parser.add_argument('--data', default='/data01/tf6/DATA/imagenet', metavar='DIR',
                     help='path to dataset')
 parser.add_argument('-a', '--arch', metavar='ARCH', default='fixup_resnet50',
                     choices=model_names,
@@ -75,12 +76,24 @@ parser.add_argument('--multiprocessing-distributed', action='store_true',
                          'N processes per node, which has N GPUs. This is the '
                          'fastest way to use PyTorch for either single node or '
                          'multi node data parallel training')
+parser.add_argument('--PC', default=0, type=int, help='precondition level')
+parser.add_argument('--cutmix_prob', default=0, type=float, help='cutmix probability')
+
+
+args = parser.parse_args()
+args.save_dir = "imagenet_classifiction_results/imagenet_{}_pc{}_lr{}_bs{}_epoch{}_cutmixprob{}_cosine_noBN_withscalar_init_fixup_seed{}".format(
+    args.arch, args.PC, args.lr, args.batch_size, args.epochs, args.cutmix_prob, args.seed)
+if not os.path.exists(args.save_dir):
+    os.makedirs(args.save_dir)
 
 best_acc1 = 0
+train_accuracy1 = []
+train_accuracy5 = []
+val_accuracy1 = []
+val_accuracy5 = []
 
 
 def main():
-    args = parser.parse_args()
 
     if args.seed is not None:
         random.seed(args.seed)
@@ -180,8 +193,8 @@ def main_worker(gpu, ngpus_per_node, args):
     parameters_others = [p[1] for p in model.named_parameters() if not ('bias' in p[0] or 'scale' in p[0])]
     optimizer = torch.optim.SGD(
         [{'params': parameters_others},
-        {'params': parameters_bias, 'lr': args.base_lr/10.},
-        {'params': parameters_scale, 'lr': args.base_lr/10.}],
+        {'params': parameters_bias, 'lr': args.lr/10.},
+        {'params': parameters_scale, 'lr': args.lr/10.}],
         lr=args.lr, #base_learning_rate,
         momentum=args.momentum,
         weight_decay=args.weight_decay)
@@ -233,7 +246,7 @@ def main_worker(gpu, ngpus_per_node, args):
 
     train_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=args.batch_size, shuffle=(train_sampler is None),
-        num_workers=args.workers, pin_memory=True, sampler=train_sampler)
+        num_workers=args.workers, pin_memory=False, sampler=train_sampler)
 
     val_loader = torch.utils.data.DataLoader(
         datasets.ImageFolder(valdir, transforms.Compose([
@@ -243,7 +256,7 @@ def main_worker(gpu, ngpus_per_node, args):
             normalize,
         ])),
         batch_size=args.batch_size, shuffle=False,
-        num_workers=args.workers, pin_memory=True)
+        num_workers=args.workers, pin_memory=False)
 
     if args.evaluate:
         validate(val_loader, model, criterion, args)
@@ -321,6 +334,11 @@ def train(train_loader, model, criterion, optimizer, epoch, args):
         if i % args.print_freq == 0:
             progress.display(i)
 
+    train_accuracy1.append(top1.avg)
+    np.save('{}/train_accuracy1.npy'.format(args.save_dir), train_accuracy1)
+    train_accuracy5.append(top5.avg)
+    np.save('{}/train_accuracy5.npy'.format(args.save_dir), train_accuracy5)
+
 
 def validate(val_loader, model, criterion, args):
     batch_time = AverageMeter('Time', ':6.3f')
@@ -363,14 +381,19 @@ def validate(val_loader, model, criterion, args):
         # TODO: this should also be done with the ProgressMeter
         print(' * Acc@1 {top1.avg:.3f} Acc@5 {top5.avg:.3f}'
               .format(top1=top1, top5=top5))
+    
+    val_accuracy1.append(top1.avg)
+    np.save('{}/val_accuracy1.npy'.format(args.save_dir), val_accuracy1)
+    val_accuracy5.append(top5.avg)
+    np.save('{}/val_accuracy5.npy'.format(args.save_dir), val_accuracy5)
 
     return top1.avg
 
 
-def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
+def save_checkpoint(state, is_best, filename=args.save_dir+'/checkpoint.pth.tar'):
     torch.save(state, filename)
     if is_best:
-        shutil.copyfile(filename, 'model_best.pth.tar')
+        shutil.copyfile(filename, args.save_dir+'/model_best.pth.tar')
 
 
 class AverageMeter(object):
