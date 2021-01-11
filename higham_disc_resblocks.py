@@ -162,11 +162,8 @@ class DeepBlock(nn.Module):
                                             use_adaptivePC=use_adaptivePC, pclevel=pclevel, diter=diter)
         self.c2 = Higham_norm.spectral_norm(nn.Conv2d(h_ch, h_ch, ksize, padding=pad), n_power_iterations=power_iter,
                                             use_adaptivePC=use_adaptivePC, pclevel=pclevel, diter=diter)
-        self.c3 = Higham_norm.spectral_norm(nn.Conv2d(h_ch, h_ch, ksize, padding=pad), n_power_iterations=power_iter,
+        self.c3 = Higham_norm.spectral_norm(nn.Conv2d(h_ch, out_ch, kernel_size=1, padding=0), n_power_iterations=power_iter,
                                             use_adaptivePC=use_adaptivePC, pclevel=pclevel, diter=diter)
-        self.c4 = Higham_norm.spectral_norm(nn.Conv2d(h_ch, out_ch, kernel_size=1, padding=0), n_power_iterations=power_iter,
-                                            use_adaptivePC=use_adaptivePC, pclevel=pclevel, diter=diter)
-        
         if self.learnable_sc:
             self.c_sc = Higham_norm.spectral_norm(nn.Conv2d(in_ch, out_ch, 1, 1, 0), n_power_iterations=power_iter,
                                                   use_adaptivePC=use_adaptivePC, pclevel=pclevel, diter=diter)
@@ -176,14 +173,13 @@ class DeepBlock(nn.Module):
         h = self.c1(F.relu(x))
         # 3x3 convs
         h = self.c2(self.activation(h))
-        h = self.c3(self.activation(h))
         # relu before downsample
         h = self.activation(h)
         # downsample
         if self.downsample:
             h = F.avg_pool2d(h, 2)   
         # final 1x1 conv
-        h = self.c4(h)
+        h = self.c3(h)
         return h + self.shortcut(x)
 
     def shortcut(self, x):
@@ -192,11 +188,3 @@ class DeepBlock(nn.Module):
         if self.downsample:
             return F.avg_pool2d(x, 2)
         return x
-
-    def residual(self, x):
-        h = self.c1(self.activation(x))
-        h = self.c2(self.activation(h))
-        if self.downsample:
-            h = F.avg_pool2d(h, 2)
-        return h
-
