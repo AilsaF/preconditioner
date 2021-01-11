@@ -77,7 +77,7 @@ best_prec1 = 0
 args = parser.parse_args()
 # Check the save_dir exists or not
 # args.save_dir = "test_ignore" 
-args.save_dir = "cifar10_classifiction_results/cifar_{}_pc{}_lr{}_bs{}_epoch{}_cutmixprob{}_cosine_noBN_withscalar_init_diy3_seed{}".format(
+args.save_dir = "cifar10_classifiction_results/cifar_{}_pc{}_lr{}_bs{}_epoch{}_cutmixprob{}_cosine_noBN_withscalar_init_diy4_seed{}".format(
     args.arch, args.PC, args.lr, args.batch_size, args.epochs, args.cutmix_prob, args.seed)
 if not os.path.exists(args.save_dir):
     os.makedirs(args.save_dir)
