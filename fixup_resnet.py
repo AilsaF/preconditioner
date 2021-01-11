@@ -76,9 +76,23 @@ class FixupResNet(nn.Module):
                 nn.init.normal_(m.conv1.weight, mean=0, std=np.sqrt(2. / (m.conv1.weight.shape[0] * np.prod(m.conv1.weight.shape[2:]))) * self.num_layers ** (-0.5))
                 # nn.init.constant_(m.conv2.weight, 0)
                 nn.init.normal_(m.conv2.weight, mean=0, std=np.sqrt(2. / (m.conv1.weight.shape[0] * np.prod(m.conv1.weight.shape[2:]))) * self.num_layers ** (-0.5))
+                w = m.conv1.weight.data
+                w = w.view(w.shape[0], -1)
+                singular = torch.svd(w)[1][0]
+                nn.init.orthogonal_(m.conv1.weight, gain=singular)
+                w = m.conv2.weight.data
+                w = w.view(w.shape[0], -1)
+                singular = torch.svd(w)[1][0]
+                nn.init.orthogonal_(m.conv2.weight, gain=singular)
+
             elif isinstance(m, nn.Linear):
                 # nn.init.constant_(m.weight, 0)
-                nn.init.normal_(m.weight, mean=0, std=np.sqrt(2. / m.weight.shape[0]) * self.num_layers ** (-0.5))
+                # nn.init.normal_(m.weight, mean=0, std=np.sqrt(2. / m.weight.shape[0]) * self.num_layers ** (-0.5))
+                nn.init.orthogonal_(m.weight, gain=np.sqrt(2. / m.weight.shape[0]) * self.num_layers ** (-0.5))
+                w = m.weight.data
+                singular = torch.svd(w)[1][0]
+                nn.init.orthogonal_(m.weight, gain=singular)
+                
                 nn.init.constant_(m.bias, 0)
 
     def _make_layer(self, block, planes, blocks, stride=1, PC=0):
