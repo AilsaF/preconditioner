@@ -334,9 +334,9 @@ def train(train_loader, model, criterion, optimizer, epoch, args):
         if i % args.print_freq == 0:
             progress.display(i)
 
-    train_accuracy1.append(top1.avg)
+    train_accuracy1.append(top1.avg.item())
     np.save('{}/train_accuracy1.npy'.format(args.save_dir), train_accuracy1)
-    train_accuracy5.append(top5.avg)
+    train_accuracy5.append(top5.avg.item())
     np.save('{}/train_accuracy5.npy'.format(args.save_dir), train_accuracy5)
 
 
@@ -382,9 +382,9 @@ def validate(val_loader, model, criterion, args):
         print(' * Acc@1 {top1.avg:.3f} Acc@5 {top5.avg:.3f}'
               .format(top1=top1, top5=top5))
     
-    val_accuracy1.append(top1.avg)
+    val_accuracy1.append(top1.avg.item())
     np.save('{}/val_accuracy1.npy'.format(args.save_dir), val_accuracy1)
-    val_accuracy5.append(top5.avg)
+    val_accuracy5.append(top5.avg.item())
     np.save('{}/val_accuracy5.npy'.format(args.save_dir), val_accuracy5)
 
     return top1.avg
