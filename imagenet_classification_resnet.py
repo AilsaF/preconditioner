@@ -19,7 +19,7 @@ import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 import fixup_resnet_imagenet
 
-
+print("init amp")
 scaler = torch.cuda.amp.GradScaler()
 
 model_names = sorted(name for name in fixup_resnet_imagenet.__dict__
@@ -315,9 +315,10 @@ def train(train_loader, model, criterion, optimizer, epoch, args):
         if torch.cuda.is_available():
             target = target.cuda(args.gpu, non_blocking=True)
 
-        # compute output
-        output = model(images)
-        loss = criterion(output, target)
+        # compute output AMP!!
+        with torch.cuda.amp.autocast():
+            output = model(images)
+            loss = criterion(output, target)
 
         # measure accuracy and record loss
         acc1, acc5 = accuracy(output, target, topk=(1, 5))
@@ -330,7 +331,7 @@ def train(train_loader, model, criterion, optimizer, epoch, args):
         # loss.backward()
         # optimizer.step()
 
-        # AMF!!!!!!!
+        # AMP!!!!!!!
         scaler.scale(loss).backward()
         scaler.step(optimizer)
         scaler.update()
@@ -369,9 +370,10 @@ def validate(val_loader, model, criterion, args):
             if torch.cuda.is_available():
                 target = target.cuda(args.gpu, non_blocking=True)
 
-            # compute output
-            output = model(images)
-            loss = criterion(output, target)
+            # compute output AMP!!!!!
+            with torch.cuda.amp.autocast():
+                output = model(images)
+                loss = criterion(output, target)
 
             # measure accuracy and record loss
             acc1, acc5 = accuracy(output, target, topk=(1, 5))
