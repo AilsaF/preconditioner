@@ -19,6 +19,9 @@ import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 import fixup_resnet_imagenet
 
+
+scaler = torch.cuda.amp.GradScaler()
+
 model_names = sorted(name for name in fixup_resnet_imagenet.__dict__
     if name.islower() and not name.startswith("__")
     and name.startswith("fixup_resnet")
@@ -69,7 +72,7 @@ parser.add_argument('--dist-backend', default='nccl', type=str,
                     help='distributed backend')
 parser.add_argument('--seed', default=0, type=int,
                     help='seed for initializing training. ')
-parser.add_argument('--gpu', default=None, type=int,
+parser.add_argument('--gpu', default=0, type=int,
                     help='GPU id to use.')
 parser.add_argument('--multiprocessing-distributed', action='store_true',
                     help='Use multi-processing distributed training to launch '
@@ -81,7 +84,7 @@ parser.add_argument('--cutmix_prob', default=0, type=float, help='cutmix probabi
 
 
 args = parser.parse_args()
-args.save_dir = "imagenet_classifiction_results/imagenet_{}_pc{}_lr{}_bs{}_epoch{}_cutmixprob{}_cosine_noBN_withscalar_init_fixup_seed{}".format(
+args.save_dir = "imagenet_classifiction_results/imagenet_{}_pc{}_lr{}_bs{}_epoch{}_cutmixprob{}_cosine_noBN_withscalar_init_fixup_seed{}_amptest".format(
     args.arch, args.PC, args.lr, args.batch_size, args.epochs, args.cutmix_prob, args.seed)
 if not os.path.exists(args.save_dir):
     os.makedirs(args.save_dir)
@@ -324,8 +327,13 @@ def train(train_loader, model, criterion, optimizer, epoch, args):
 
         # compute gradient and do SGD step
         optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+        # loss.backward()
+        # optimizer.step()
+
+        # AMF!!!!!!!
+        scaler.scale(loss).backward()
+        scaler.step(optimizer)
+        scaler.update()
 
         # measure elapsed time
         batch_time.update(time.time() - end)
