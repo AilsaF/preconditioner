@@ -504,7 +504,7 @@ class ResNetProjectionDiscriminator32(nn.Module):
         return output
 
 # ============== deepgan =================
-from higham_disc_resblocks import DeepBlock as DeepDiscBlock
+from higham_disc_resblocks import DeepBlock2 as DeepDiscBlock
 from gen_resblocks import DeepBlock2 as DeepGenBlock
 
 class DeepResNetGenerator32(nn.Module):
