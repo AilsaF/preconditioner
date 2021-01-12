@@ -22,6 +22,9 @@ import fixup_resnet
 from torch.optim.lr_scheduler import CosineAnnealingLR
 
 
+print("init amp")
+scaler = torch.cuda.amp.GradScaler()
+
 model_names = sorted(name for name in resnet.__dict__
     if name.islower() and not name.startswith("__")
                      and name.startswith("resnet")
@@ -107,6 +110,31 @@ def main():
     file.write(str(model))
     file.write("\n")
 
+
+    # optimizer = torch.optim.SGD(model.parameters(), args.lr,
+    #                             momentum=args.momentum,
+    #                             weight_decay=args.weight_decay)
+    parameters_bias = [p[1] for p in model.named_parameters() if 'bias' in p[0]]
+    parameters_scale = [p[1] for p in model.named_parameters() if 'scale' in p[0]]
+    parameters_others = [p[1] for p in model.named_parameters() if not ('bias' in p[0] or 'scale' in p[0])]
+    optimizer = torch.optim.SGD(
+            [{'params': parameters_others},
+            {'params': parameters_bias, 'lr': args.lr/10.}, 
+            {'params': parameters_scale, 'lr': args.lr/10.}], 
+            lr=args.lr, 
+            momentum=0.9, 
+            weight_decay=args.weight_decay)
+
+    # lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer,
+    #                                                     milestones=[100, 150], last_epoch=args.start_epoch - 1)
+    # if args.arch in ['resnet1202', 'resnet110']:
+    #     # for resnet1202 original paper uses lr=0.01 for first 400 minibatches for warm-up
+    #     # then switch back. In this setup it will correspond for first epoch.
+    #     for param_group in optimizer.param_groups:
+    #         param_group['lr'] = args.lr*0.1
+
+    lr_scheduler = CosineAnnealingLR(optimizer, args.epochs, eta_min=0, last_epoch=-1)
+
     # optionally resume from a checkpoint
     if args.resume:
         if os.path.isfile(args.resume):
@@ -115,6 +143,8 @@ def main():
             args.start_epoch = checkpoint['epoch']
             best_prec1 = checkpoint['best_prec1']
             model.load_state_dict(checkpoint['state_dict'])
+            optimizer.load_state_dict(checkpoint['optimizer'])
+            scaler.load_state_dict(checkpoint['scaler'])
             print("=> loaded checkpoint '{}' (epoch {})"
                   .format(args.evaluate, checkpoint['epoch']))
         else:
@@ -150,30 +180,6 @@ def main():
         model.half()
         criterion.half()
 
-    # optimizer = torch.optim.SGD(model.parameters(), args.lr,
-    #                             momentum=args.momentum,
-    #                             weight_decay=args.weight_decay)
-    parameters_bias = [p[1] for p in model.named_parameters() if 'bias' in p[0]]
-    parameters_scale = [p[1] for p in model.named_parameters() if 'scale' in p[0]]
-    parameters_others = [p[1] for p in model.named_parameters() if not ('bias' in p[0] or 'scale' in p[0])]
-    optimizer = torch.optim.SGD(
-            [{'params': parameters_others},
-            {'params': parameters_bias, 'lr': args.lr/10.}, 
-            {'params': parameters_scale, 'lr': args.lr/10.}], 
-            lr=args.lr, 
-            momentum=0.9, 
-            weight_decay=args.weight_decay)
-
-    # lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer,
-    #                                                     milestones=[100, 150], last_epoch=args.start_epoch - 1)
-    # if args.arch in ['resnet1202', 'resnet110']:
-    #     # for resnet1202 original paper uses lr=0.01 for first 400 minibatches for warm-up
-    #     # then switch back. In this setup it will correspond for first epoch.
-    #     for param_group in optimizer.param_groups:
-    #         param_group['lr'] = args.lr*0.1
-
-    lr_scheduler = CosineAnnealingLR(optimizer, args.epochs, eta_min=0, last_epoch=-1)
-
     if args.evaluate:
         validate(val_loader, model, criterion)
         return
@@ -195,14 +201,18 @@ def main():
         if epoch > 0 and epoch % args.save_every == 0:
             save_checkpoint({
                 'epoch': epoch + 1,
+                'arch': args.arch,
                 'state_dict': model.state_dict(),
                 'cur_prec1': prec1,
-            }, True, filename=os.path.join(args.save_dir, 'checkpoint.th'))
+                'best_prec1': best_prec1,
+                'optimizer': optimizer.state_dict(),
+                'scaler': scaler.state_dict()
+            }, is_best, filename=os.path.join(args.save_dir, 'checkpoint.pth.tar'))
 
-        save_checkpoint({
-            'state_dict': model.state_dict(),
-            'best_prec1': best_prec1,
-        }, is_best, filename=os.path.join(args.save_dir, 'model.th'))
+        # save_checkpoint({
+        #     'state_dict': model.state_dict(),
+        #     'best_prec1': best_prec1,
+        # }, is_best, filename=os.path.join(args.save_dir, 'model.th'))
     
     file.close()
 
@@ -244,16 +254,22 @@ def train(train_loader, model, criterion, optimizer, epoch):
             # adjust lambda to exactly match pixel ratio
             lam = 1 - ((bbx2 - bbx1) * (bby2 - bby1) / (input_var.size()[-1] * input_var.size()[-2]))
             # compute output
-            output = model(input_var)
-            loss = criterion(output, target_a) * lam + criterion(output, target_b) * (1. - lam)
+            with torch.cuda.amp.autocast():
+                output = model(input_var)
+                loss = criterion(output, target_a) * lam + criterion(output, target_b) * (1. - lam)
         else:
-            output = model(input_var)
-            loss = criterion(output, target_var)
+            with torch.cuda.amp.autocast():
+                output = model(input_var)
+                loss = criterion(output, target_var)
 
         # compute gradient and do SGD step
         optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+        # loss.backward()
+        # optimizer.step()
+        # AMP!!!!!!
+        scaler.scale(loss).backward()
+        scaler.step(optimizer)
+        scaler.update()
 
         output = output.float()
         loss = loss.float()
@@ -301,8 +317,9 @@ def validate(val_loader, model, criterion):
                 input_var = input_var.half()
 
             # compute output
-            output = model(input_var)
-            loss = criterion(output, target_var)
+            with torch.cuda.amp.autocast():
+                output = model(input_var)
+                loss = criterion(output, target_var)
 
             output = output.float()
             loss = loss.float()
@@ -333,8 +350,9 @@ def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
     """
     Save the training model
     """
+    torch.save(state, filename)
     if is_best:
-        torch.save(state, filename)
+        shutil.copyfile(filename, args.save_dir+'/model_best.pth.tar')
 
 class AverageMeter(object):
     """Computes and stores the average and current value"""
