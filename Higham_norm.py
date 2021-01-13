@@ -79,6 +79,7 @@ class SpectralNorm(object):
         pcleval = getattr(module, self.name + '_pcleval')
         cns = getattr(module, self.name + '_cns')
         weight_mat = self.reshape_weight_to_matrix(weight)
+        weight_mat = weight_mat.half()
 
         if do_power_iteration:
             with torch.no_grad():
@@ -99,7 +100,7 @@ class SpectralNorm(object):
                     u = u.clone()
                     v = v.clone()
 
-        sigma = torch.dot(u, torch.mv(weight_mat, v))
+        sigma = torch.dot(u.half(), torch.mv(weight_mat, v.half()))
         weight = weight / sigma
         # # --------- remove later -------------
         # if self.called_time % 250 == 0:
