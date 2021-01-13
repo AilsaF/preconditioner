@@ -80,7 +80,7 @@ best_prec1 = 0
 args = parser.parse_args()
 # Check the save_dir exists or not
 # args.save_dir = "test_ignore" 
-args.save_dir = "cifar10_classifiction_results/cifar_{}_pc{}_lr{}_bs{}_epoch{}_cutmixprob{}_cosine_noBN_withscalar_init_diy4_seed{}".format(
+args.save_dir = "cifar10_classifiction_results/cifar_{}_pc{}_lr{}_bs{}_epoch{}_cutmixprob{}_steplr_noBN_withscalar_init_diy4_seed{}test".format(
     args.arch, args.PC, args.lr, args.batch_size, args.epochs, args.cutmix_prob, args.seed)
 if not os.path.exists(args.save_dir):
     os.makedirs(args.save_dir)
@@ -119,21 +119,21 @@ def main():
     parameters_others = [p[1] for p in model.named_parameters() if not ('bias' in p[0] or 'scale' in p[0])]
     optimizer = torch.optim.SGD(
             [{'params': parameters_others},
-            {'params': parameters_bias, 'lr': args.lr/10.}, 
-            {'params': parameters_scale, 'lr': args.lr/10.}], 
+            {'params': parameters_bias, 'lr': args.lr/10}, 
+            {'params': parameters_scale, 'lr': args.lr/10}], 
             lr=args.lr, 
             momentum=0.9, 
             weight_decay=args.weight_decay)
 
-    # lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer,
-    #                                                     milestones=[100, 150], last_epoch=args.start_epoch - 1)
+    lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer,
+                                                        milestones=[100, 150], last_epoch=args.start_epoch - 1)
     # if args.arch in ['resnet1202', 'resnet110']:
     #     # for resnet1202 original paper uses lr=0.01 for first 400 minibatches for warm-up
     #     # then switch back. In this setup it will correspond for first epoch.
     #     for param_group in optimizer.param_groups:
     #         param_group['lr'] = args.lr*0.1
 
-    lr_scheduler = CosineAnnealingLR(optimizer, args.epochs, eta_min=0, last_epoch=-1)
+    # lr_scheduler = CosineAnnealingLR(optimizer, args.epochs, eta_min=0, last_epoch=-1)
 
     # optionally resume from a checkpoint
     if args.resume:
@@ -144,7 +144,7 @@ def main():
             best_prec1 = checkpoint['best_prec1']
             model.load_state_dict(checkpoint['state_dict'])
             optimizer.load_state_dict(checkpoint['optimizer'])
-            scaler.load_state_dict(checkpoint['scaler'])
+            # scaler.load_state_dict(checkpoint['scaler'])
             print("=> loaded checkpoint '{}' (epoch {})"
                   .format(args.evaluate, checkpoint['epoch']))
         else:
@@ -198,16 +198,15 @@ def main():
         is_best = prec1 > best_prec1
         best_prec1 = max(prec1, best_prec1)
 
-        if epoch > 0 and epoch % args.save_every == 0:
-            save_checkpoint({
-                'epoch': epoch + 1,
-                'arch': args.arch,
-                'state_dict': model.state_dict(),
-                'cur_prec1': prec1,
-                'best_prec1': best_prec1,
-                'optimizer': optimizer.state_dict(),
-                'scaler': scaler.state_dict()
-            }, is_best, filename=os.path.join(args.save_dir, 'checkpoint.pth.tar'))
+        save_checkpoint({
+            'epoch': epoch + 1,
+            'arch': args.arch,
+            'state_dict': model.state_dict(),
+            'cur_prec1': prec1,
+            'best_prec1': best_prec1,
+            'optimizer': optimizer.state_dict(),
+            # 'scaler': scaler.state_dict()
+        }, is_best, filename=os.path.join(args.save_dir, 'checkpoint.pth.tar'))
 
         # save_checkpoint({
         #     'state_dict': model.state_dict(),

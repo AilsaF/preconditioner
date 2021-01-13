@@ -79,6 +79,8 @@ class SpectralNorm(object):
         pcleval = getattr(module, self.name + '_pcleval')
         cns = getattr(module, self.name + '_cns')
         weight_mat = self.reshape_weight_to_matrix(weight)
+        # AMP
+        weight_mat = weight_mat.half()
 
         if do_power_iteration:
             with torch.no_grad():
@@ -99,7 +101,8 @@ class SpectralNorm(object):
                     u = u.clone()
                     v = v.clone()
 
-        sigma = torch.dot(u, torch.mv(weight_mat, v))
+        # sigma = torch.dot(u, torch.mv(weight_mat, v))
+        sigma = torch.dot(u.half(), torch.mv(weight_mat, v.half()))
         weight = weight / sigma
         # # --------- remove later -------------
         # if self.called_time % 250 == 0:
@@ -117,6 +120,7 @@ class SpectralNorm(object):
         if self.use_adaptivePC and (self.called_time//self.diter) % 500 == 0:
             if len(weight.shape) > 2:
                 weight_mat = weight.detach().view(weight.shape[0], -1)
+                weight_mat = weight_mat.half()
                 S = torch.svd(weight_mat)[1]
                 sin_num = max(1, int(S.shape[0] * 0.1))
                 condition_number = S[0] / (S[-sin_num:]).mean()
