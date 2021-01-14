@@ -129,10 +129,10 @@ class DeepBlock(nn.Module):
         # 3x3 convs
         h = self.c2(h)
         h = self.c3(self.activation(self.b3(h)))
-        h = self.c4(self.activation(self.b3(h)))
-        h = self.c5(self.activation(self.b3(h)))
+        h = self.c4(self.activation(self.b4(h)))
+        h = self.c5(self.activation(self.b5(h)))
         # Final 1x1 conv
-        h = self.c6(self.activation(self.b4(h)))
+        h = self.c6(self.activation(self.b6(h)))
         if self.learnable_sc:
             return h+self.c_sc(x)
         else:
