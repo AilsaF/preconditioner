@@ -87,9 +87,8 @@ class FixupResNet(nn.Module):
                 # nn.init.orthogonal_(m.conv2.weight, gain=singular)
 
                 nn.init.orthogonal_(m.conv1.weight, gain=self.num_layers ** (-0.5))
-                nn.init.orthogonal_(m.conv2.weight, gain=self.num_layers ** (-0.5))
+                nn.init.orthogonal_(m.conv2.weight, gain=self.num_layers ** (-0.9))
                 
-
             elif isinstance(m, nn.Linear):
                 nn.init.constant_(m.weight, 0)
                 # nn.init.orthogonal_(m.weight, gain=self.num_layers ** (-0.5))
