@@ -83,7 +83,7 @@ class SpectralNorm(object):
         if do_power_iteration:
             with torch.no_grad():
                 if self.called_time==0:
-                    n_power_iterations = 1000
+                    n_power_iterations = 1
                 else:
                     n_power_iterations = self.n_power_iterations
                 for _ in range(n_power_iterations):

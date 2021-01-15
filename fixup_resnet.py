@@ -54,7 +54,7 @@ class FixupBasicBlock(nn.Module):
 
 class FixupResNet(nn.Module):
 
-    def __init__(self, block, layers, num_classes=10, PC=0):
+    def __init__(self, block, layers, num_classes=10, PC=0, init='fixup'):
         super(FixupResNet, self).__init__()
         self.num_layers = sum(layers)
         self.inplanes = 16
@@ -73,9 +73,11 @@ class FixupResNet(nn.Module):
 
         for m in self.modules():
             if isinstance(m, FixupBasicBlock):
-                # nn.init.normal_(m.conv1.weight, mean=0, std=np.sqrt(2. / (m.conv1.weight.shape[0] * np.prod(m.conv1.weight.shape[2:]))) * self.num_layers ** (-0.5))
-                # nn.init.normal_(m.conv2.weight, mean=0, std=np.sqrt(2. / (m.conv2.weight.shape[0] * np.prod(m.conv2.weight.shape[2:]))) * self.num_layers ** (-0.5))
-                
+                if init == 'fixup':
+                    nn.init.normal_(m.conv1.weight, mean=0, std=np.sqrt(2. / (m.conv1.weight.shape[0] * np.prod(m.conv1.weight.shape[2:]))) * self.num_layers ** (-0.5))
+                    # nn.init.normal_(m.conv2.weight, mean=0, std=np.sqrt(2. / (m.conv2.weight.shape[0] * np.prod(m.conv2.weight.shape[2:]))) * self.num_layers ** (-0.5))
+                    nn.init.constant_(m.conv2.weight, 0)
+
                 # w = m.conv1.weight.data
                 # w = w.view(w.shape[0], -1)
                 # singular = torch.svd(w)[1][0]
@@ -85,9 +87,9 @@ class FixupResNet(nn.Module):
                 # w = w.view(w.shape[0], -1)
                 # singular = torch.svd(w)[1][0]
                 # nn.init.orthogonal_(m.conv2.weight, gain=singular)
-
-                nn.init.orthogonal_(m.conv1.weight, gain=self.num_layers ** (-0.5))
-                nn.init.orthogonal_(m.conv2.weight, gain=self.num_layers ** (-0.9))
+                else:
+                    nn.init.orthogonal_(m.conv1.weight, gain=self.num_layers ** (-0.5))
+                    nn.init.orthogonal_(m.conv2.weight, gain=self.num_layers ** (-0.5))
                 
             elif isinstance(m, nn.Linear):
                 nn.init.constant_(m.weight, 0)

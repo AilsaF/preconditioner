@@ -19,7 +19,7 @@ import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 import resnet
 import fixup_resnet
-from torch.optim.lr_scheduler import CosineAnnealingLR
+from torch.optim.lr_scheduler import CosineAnnealingLR, CosineAnnealingWarmRestarts
 
 
 model_names = sorted(name for name in resnet.__dict__
@@ -71,14 +71,19 @@ parser.add_argument('--seed', default=0, type=int, help='seed')
 parser.add_argument('--PC', default=0, type=int, help='seed')
 parser.add_argument('--beta', default=1.0, type=float, help='beta for cutmix')
 parser.add_argument('--cutmix_prob', default=0, type=float, help='cutmix probability')
+parser.add_argument('--opt', default='steplr', type=str)
+parser.add_argument('--specname', default='', type=str)
+parser.add_argument('--init', default='fixup', type=str)
+
 
 best_prec1 = 0
 
 args = parser.parse_args()
 # Check the save_dir exists or not
 # args.save_dir = "test_ignore" 
-args.save_dir = "cifar10_classifiction_results/cifar_{}_pc{}_lr{}_bs{}_epoch{}_cutmixprob{}_cosine_noBN_withscalar_init_diy1_seed{}".format(
-    args.arch, args.PC, args.lr, args.batch_size, args.epochs, args.cutmix_prob, args.seed)
+args.save_dir = "/home/tf6/preconditioner/cifar10_classifiction_results/cifar_{}_pc{}_lr{}_bs{}_epoch{}_cutmixprob{}_{}_noBN_withscalar_init_{}_seed{}".format(
+    args.arch, args.PC, args.lr, args.batch_size, args.epochs, args.cutmix_prob, args.opt, args.init, args.seed)
+args.save_dir += '_{}'.format(args.specname) if args.specname else ''
 if not os.path.exists(args.save_dir):
     os.makedirs(args.save_dir)
 file = open("{}/log.txt".format(args.save_dir),"w+") 
@@ -101,7 +106,7 @@ def main():
     if 'fixup' in args.arch:
         model = fixup_resnet.__dict__[args.arch](PC=args.PC)
     else:
-        model = resnet.__dict__[args.arch](PC=args.PC)
+        model = resnet.__dict__[args.arch]()
     model.cuda()
     # model.apply(init_ortho_weights)
     file.write(str(model))
@@ -126,7 +131,7 @@ def main():
                                      std=[0.229, 0.224, 0.225])
 
     train_loader = torch.utils.data.DataLoader(
-        datasets.CIFAR10(root='/data01/tf6/DATA/cifar10/', train=True, transform=transforms.Compose([
+        datasets.CIFAR10(root='/home/tf6/cifar10/', train=True, transform=transforms.Compose([
             transforms.RandomHorizontalFlip(),
             transforms.RandomCrop(32, 4),
             transforms.ToTensor(),
@@ -136,7 +141,7 @@ def main():
         num_workers=args.workers)
 
     val_loader = torch.utils.data.DataLoader(
-        datasets.CIFAR10(root='/data01/tf6/DATA/cifar10/', train=False, transform=transforms.Compose([
+        datasets.CIFAR10(root='/home/tf6/cifar10/', train=False, transform=transforms.Compose([
             transforms.ToTensor(),
             normalize,
         ])),
@@ -150,29 +155,29 @@ def main():
         model.half()
         criterion.half()
 
-    # optimizer = torch.optim.SGD(model.parameters(), args.lr,
-    #                             momentum=args.momentum,
-    #                             weight_decay=args.weight_decay)
-    parameters_bias = [p[1] for p in model.named_parameters() if 'bias' in p[0]]
-    parameters_scale = [p[1] for p in model.named_parameters() if 'scale' in p[0]]
-    parameters_others = [p[1] for p in model.named_parameters() if not ('bias' in p[0] or 'scale' in p[0])]
-    optimizer = torch.optim.SGD(
-            [{'params': parameters_others},
-            {'params': parameters_bias, 'lr': args.lr/10.}, 
-            {'params': parameters_scale, 'lr': args.lr/10.}], 
-            lr=args.lr, 
-            momentum=0.9, 
-            weight_decay=args.weight_decay)
+    if 'fixup' not in args.arch:
+        optimizer = torch.optim.SGD(model.parameters(), args.lr,
+                                    momentum=args.momentum,
+                                    weight_decay=args.weight_decay)
+    else:
+        parameters_bias = [p[1] for p in model.named_parameters() if 'bias' in p[0]]
+        parameters_scale = [p[1] for p in model.named_parameters() if 'scale' in p[0]]
+        parameters_others = [p[1] for p in model.named_parameters() if not ('bias' in p[0] or 'scale' in p[0])]
+        optimizer = torch.optim.SGD(
+                [{'params': parameters_others},
+                {'params': parameters_bias, 'lr': args.lr/10.}, 
+                {'params': parameters_scale, 'lr': args.lr/10.}], 
+                lr=args.lr, 
+                momentum=0.9, 
+                weight_decay=args.weight_decay)
 
-    # lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer,
-    #                                                     milestones=[100, 150], last_epoch=args.start_epoch - 1)
-    # if args.arch in ['resnet1202', 'resnet110']:
-    #     # for resnet1202 original paper uses lr=0.01 for first 400 minibatches for warm-up
-    #     # then switch back. In this setup it will correspond for first epoch.
-    #     for param_group in optimizer.param_groups:
-    #         param_group['lr'] = args.lr*0.1
-
-    lr_scheduler = CosineAnnealingLR(optimizer, args.epochs, eta_min=0, last_epoch=-1)
+    if args.opt == 'steplr':
+        lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer,
+                                                            milestones=[100, 150], last_epoch=args.start_epoch - 1)
+    elif args.opt == 'cosine':
+        lr_scheduler = CosineAnnealingLR(optimizer, args.epochs, eta_min=0, last_epoch=-1)
+    elif args.opt == 'cosinerestart':
+        lr_scheduler = CosineAnnealingWarmRestarts(optimizer, 10, 2)
 
     if args.evaluate:
         validate(val_loader, model, criterion)
@@ -192,12 +197,11 @@ def main():
         is_best = prec1 > best_prec1
         best_prec1 = max(prec1, best_prec1)
 
-        if epoch > 0 and epoch % args.save_every == 0:
-            save_checkpoint({
-                'epoch': epoch + 1,
-                'state_dict': model.state_dict(),
-                'cur_prec1': prec1,
-            }, True, filename=os.path.join(args.save_dir, 'checkpoint.th'))
+        save_checkpoint({
+            'epoch': epoch + 1,
+            'state_dict': model.state_dict(),
+            'cur_prec1': prec1,
+        }, True, filename=os.path.join(args.save_dir, 'checkpoint.th'))
 
         save_checkpoint({
             'state_dict': model.state_dict(),
