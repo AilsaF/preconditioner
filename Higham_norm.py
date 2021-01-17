@@ -80,78 +80,72 @@ class SpectralNorm(object):
         cns = getattr(module, self.name + '_cns')
         weight_mat = self.reshape_weight_to_matrix(weight)
 
-        if do_power_iteration:
-            with torch.no_grad():
-                if self.called_time==0:
-                    n_power_iterations = 1
-                else:
-                    n_power_iterations = self.n_power_iterations
-                for _ in range(n_power_iterations):
-                    # Spectral norm of weight equals to `u^T W v`, where `u` and `v`
-                    # are the first left and right singular vectors.
-                    # This power iteration produces approximations of `u` and `v`.
-                    v = normalize(torch.mv(weight_mat.t(), u), dim=0, eps=self.eps, out=v)
-                    u = normalize(torch.mv(weight_mat, v), dim=0, eps=self.eps, out=u)
-                if self.n_power_iterations > 0:
-                    # See above on why we need to clone
-                    # u = u.clone(memory_format=torch.contiguous_format)
-                    # v = v.clone(memory_format=torch.contiguous_format)
-                    u = u.clone()
-                    v = v.clone()
+        if torch.norm(weight) > 0.:
+            if do_power_iteration:
+                with torch.no_grad():
+                    if self.called_time==0:
+                        n_power_iterations = 1
+                    else:
+                        n_power_iterations = self.n_power_iterations
+                    for _ in range(n_power_iterations):
+                        # Spectral norm of weight equals to `u^T W v`, where `u` and `v`
+                        # are the first left and right singular vectors.
+                        # This power iteration produces approximations of `u` and `v`.
+                        v = normalize(torch.mv(weight_mat.t(), u), dim=0, eps=self.eps, out=v)
+                        u = normalize(torch.mv(weight_mat, v), dim=0, eps=self.eps, out=u)
+                    if self.n_power_iterations > 0:
+                        # See above on why we need to clone
+                        # u = u.clone(memory_format=torch.contiguous_format)
+                        # v = v.clone(memory_format=torch.contiguous_format)
+                        u = u.clone()
+                        v = v.clone()
 
-        sigma = torch.dot(u, torch.mv(weight_mat, v))
-        weight = weight / sigma
-        # # --------- remove later -------------
-        # if self.called_time % 250 == 0:
-        #     if len(weight.shape) > 2:
-        #         weight_mat = weight.detach().view(weight.shape[0], -1)
-        #         S = torch.svd(weight_mat)[1]
-        #         print('real sigma', S[0])
-        #         print("sigma", sigma)
-        #         # condition_number = S[0] / S[-1]
-        #         # print(self.called_time, condition_number)
-
-        # ============================================
-        #             Adaptive Preconditioner
-        # ============================================
-        if self.use_adaptivePC and (self.called_time//self.diter) % 500 == 0:
-            if len(weight.shape) > 2:
-                weight_mat = weight.detach().view(weight.shape[0], -1)
-                S = torch.svd(weight_mat)[1]
-                sin_num = max(1, int(S.shape[0] * 0.1))
-                condition_number = S[0] / (S[-sin_num:]).mean()
-                cns.data = torch.cat((cns.view(-1), condition_number.view(1)))
-                recent_cn_avg = cns[-5:].mean()
-                if recent_cn_avg <= 5:
-                    pcleval.data = torch.tensor(0)
-                elif 5 < recent_cn_avg <= 10:
-                    pcleval.data = torch.tensor(1)
-                elif 10 < recent_cn_avg <= 20:
-                    pcleval.data = torch.tensor(2)
-                elif 20 < recent_cn_avg <= 30:
-                    pcleval.data = torch.tensor(3)
-                else:
-                    pcleval.data = torch.tensor(4)
-                self.pclevel = pcleval.item()
-                print("CNs are {}, change preconditioner iteration to {}".format(cns, self.pclevel))
-        self.called_time += 1
+            sigma = torch.dot(u, torch.mv(weight_mat, v))
+            weight = weight / sigma
+            
+            # # ============================================
+            # #             Adaptive Preconditioner
+            # # ============================================
+            # if self.use_adaptivePC and (self.called_time//self.diter) % 500 == 0:
+            #     if len(weight.shape) > 2:
+            #         weight_mat = weight.detach().view(weight.shape[0], -1)
+            #         S = torch.svd(weight_mat)[1]
+            #         sin_num = max(1, int(S.shape[0] * 0.1))
+            #         condition_number = S[0] / (S[-sin_num:]).mean()
+            #         cns.data = torch.cat((cns.view(-1), condition_number.view(1)))
+            #         recent_cn_avg = cns[-5:].mean()
+            #         if recent_cn_avg <= 5:
+            #             pcleval.data = torch.tensor(0)
+            #         elif 5 < recent_cn_avg <= 10:
+            #             pcleval.data = torch.tensor(1)
+            #         elif 10 < recent_cn_avg <= 20:
+            #             pcleval.data = torch.tensor(2)
+            #         elif 20 < recent_cn_avg <= 30:
+            #             pcleval.data = torch.tensor(3)
+            #         else:
+            #             pcleval.data = torch.tensor(4)
+            #         self.pclevel = pcleval.item()
+            #         print("CNs are {}, change preconditioner iteration to {}".format(cns, self.pclevel))
+            # self.called_time += 1
 
 
-        # ========================================================
-        #                 Apply Preconditioner
-        # ========================================================
-        if self.pclevel:
-            if len(weight.shape) > 2:
-                origin_shape = weight.shape
-                weight = weight.view(weight.shape[0], -1)
-                n, m = weight.shape
-                if n >= m:
-                    weight = self.preconditionertall(weight, self.pclevel)
-                else:
-                    weight = self.preconditionerwide(weight, self.pclevel)
-                weight = weight.view(origin_shape)
-        # weight = weight * 5./3
-        return weight * sigma
+            # ========================================================
+            #                 Apply Preconditioner
+            # ========================================================
+            if self.pclevel:
+                if len(weight.shape) > 2:
+                    origin_shape = weight.shape
+                    weight = weight.view(weight.shape[0], -1)
+                    n, m = weight.shape
+                    if n >= m:
+                        weight = self.preconditionertall(weight, self.pclevel)
+                    else:
+                        weight = self.preconditionerwide(weight, self.pclevel)
+                    weight = weight.view(origin_shape)
+            return weight * sigma
+        else:
+            return weight * torch.tensor(1.)
+        
 
     def preconditionertall(self, weight, pclevel):
         if pclevel == 0:
