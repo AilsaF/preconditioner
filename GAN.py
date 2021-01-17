@@ -234,7 +234,7 @@ if __name__=='__main__':
 
 # cifar
 # CUDA_VISIBLE_DEVICES=1 python GAN.py --dataset cifar --batch_size 64 --pclevel 0 --save_freq 1000 --g_lr 0.0001 --d_lr 0.0001 --beta1 0.5 --beta2 0.999 --d_freq 1 --specname settingB & 
-# export MKL_NUM_THREADS=4 && CUDA_VISIBLE_DEVICES=2 python GAN.py --dataset cifar --batch_size 64 --structure resnet --Gnum_features 512 --Dnum_features 128 --num_iters 100000  --losstype hinge --pclevel 0 --save_freq 2000 --specname deepblock --d_freq 5 &
+# export MKL_NUM_THREADS=4 && CUDA_VISIBLE_DEVICES=2 python GAN.py --dataset cifar --batch_size 64 --structure resnet --Gnum_features 512 --Dnum_features 256 --num_iters 100000  --losstype hinge --pclevel 0 --save_freq 2000 --specname deepblock_new --d_freq 5 --apc &
 
 # export MKL_NUM_THREADS=4 && CUDA_VISIBLE_DEVICES=3 python GAN.py --dataset cifar --batch_size 64 --beta1 0. --beta2 0.9 --structure resnet --Gnum_features 256 --Dnum_features 256 --d_freq 5 --losstype hinge --pclevel 0 --apc --save_freq 1000 --seed 2 --specname adaptivefitreluV2+strategy7+unifD+seed2 &
 

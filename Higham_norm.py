@@ -116,8 +116,8 @@ class SpectralNorm(object):
                 S = torch.svd(weight_mat)[1]
                 sin_num = max(1, int(S.shape[0] * 0.1))
                 condition_number = S[0] / (S[-sin_num:]).mean()
-                cns.data = torch.cat((cns.view(-1), condition_number.view(1)))
-                recent_cn_avg = cns[-5:].mean()
+                cns.data = torch.cat((cns.view(-1), condition_number.view(1)))[-5:]
+                recent_cn_avg = cns.mean()
                 if recent_cn_avg <= 5:
                     pcleval.data = torch.tensor(0)
                 elif 5 < recent_cn_avg <= 10:

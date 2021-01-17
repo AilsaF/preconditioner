@@ -176,6 +176,10 @@ class DeepBlock2(nn.Module):
         init.xavier_normal_(self.c2.weight.data)
         init.xavier_normal_(self.c3.weight.data)
         init.xavier_normal_(self.c4.weight.data)
+        init.xavier_normal_(self.c5.weight.data)
+        init.xavier_normal_(self.c6.weight.data)
+        init.xavier_normal_(self.c7.weight.data)
+        init.xavier_normal_(self.c8.weight.data)
         if self.learnable_sc:
             init.xavier_normal_(self.c_sc.weight.data, gain=1)
 
