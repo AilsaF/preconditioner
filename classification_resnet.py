@@ -104,7 +104,7 @@ def main():
     # model = torch.nn.DataParallel(resnet.__dict__[args.arch](skipconnection=args.skip, PC=args.PC))
     # model = resnet.__dict__[args.arch]()
     if 'fixup' in args.arch:
-        model = fixup_resnet.__dict__[args.arch](PC=args.PC)
+        model = fixup_resnet.__dict__[args.arch](PC=args.PC, init=args.init)
     else:
         model = resnet.__dict__[args.arch]()
     model.cuda()
