@@ -153,7 +153,7 @@ class SpectralNorm(object):
         if pclevel == 0:
             return weight
         n, m = weight.shape
-        I = torch.eye(m).cuda()
+        I = torch.eye(m, device=torch.device('cuda'))
         wtw = weight.t().mm(weight)
         if pclevel == 1:
             weight = weight.mm(1.507 * I - 0.507 * wtw)
@@ -171,7 +171,7 @@ class SpectralNorm(object):
         if pclevel == 0:
             return weight
         n, m = weight.shape
-        I = torch.eye(n).cuda()
+        I = torch.eye(n, device=torch.device('cuda'))
         wwt = weight.mm(weight.t())
         if pclevel == 1:
             weight = (1.507 * I - 0.507 * wwt).mm(weight)
