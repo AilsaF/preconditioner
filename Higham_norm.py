@@ -82,26 +82,26 @@ class SpectralNorm(object):
 
         sigma = torch.norm(weight)
         if sigma > 0.:
-            if do_power_iteration:
-                with torch.no_grad():
-                    if self.called_time==0:
-                        n_power_iterations = 1000
-                    else:
-                        n_power_iterations = self.n_power_iterations
-                    for _ in range(n_power_iterations):
-                        # Spectral norm of weight equals to `u^T W v`, where `u` and `v`
-                        # are the first left and right singular vectors.
-                        # This power iteration produces approximations of `u` and `v`.
-                        v = normalize(torch.mv(weight_mat.t(), u), dim=0, eps=self.eps, out=v)
-                        u = normalize(torch.mv(weight_mat, v), dim=0, eps=self.eps, out=u)
-                    if self.n_power_iterations > 0:
-                        # See above on why we need to clone
-                        # u = u.clone(memory_format=torch.contiguous_format)
-                        # v = v.clone(memory_format=torch.contiguous_format)
-                        u = u.clone()
-                        v = v.clone()
+            # if do_power_iteration:
+            #     with torch.no_grad():
+            #         if self.called_time==0:
+            #             n_power_iterations = 1000
+            #         else:
+            #             n_power_iterations = self.n_power_iterations
+            #         for _ in range(n_power_iterations):
+            #             # Spectral norm of weight equals to `u^T W v`, where `u` and `v`
+            #             # are the first left and right singular vectors.
+            #             # This power iteration produces approximations of `u` and `v`.
+            #             v = normalize(torch.mv(weight_mat.t(), u), dim=0, eps=self.eps, out=v)
+            #             u = normalize(torch.mv(weight_mat, v), dim=0, eps=self.eps, out=u)
+            #         if self.n_power_iterations > 0:
+            #             # See above on why we need to clone
+            #             # u = u.clone(memory_format=torch.contiguous_format)
+            #             # v = v.clone(memory_format=torch.contiguous_format)
+            #             u = u.clone()
+            #             v = v.clone()
 
-            sigma = torch.dot(u, torch.mv(weight_mat, v))
+            # sigma = torch.dot(u, torch.mv(weight_mat, v))
             weight = weight / sigma
             # # --------- remove later -------------
             # if self.called_time % 250 == 0:
@@ -164,7 +164,8 @@ class SpectralNorm(object):
         I = torch.eye(m).cuda()
         wtw = weight.t().mm(weight)
         if pclevel == 1:
-            weight = weight.mm(1.507 * I - 0.507 * wtw)
+            # weight = weight.mm(1.507 * I - 0.507 * wtw)
+            weight = weight.mm(1.2 * I - 0.2 * wtw)
         elif pclevel == 2:
             weight = weight.mm(2.083 * I + wtw.mm(-1.643 * I + 0.560 * wtw))
         elif pclevel == 3:
@@ -182,7 +183,8 @@ class SpectralNorm(object):
         I = torch.eye(n).cuda()
         wwt = weight.mm(weight.t())
         if pclevel == 1:
-            weight = (1.507 * I - 0.507 * wwt).mm(weight)
+            # weight = (1.507 * I - 0.507 * wwt).mm(weight)
+            weight = (1.2 * I - 0.2 * wwt).mm(weight)
         elif pclevel == 2:
             weight = (2.083 * I + wwt.mm(-1.643 * I + 0.560 * wwt)).mm(weight)
         elif pclevel == 3:
