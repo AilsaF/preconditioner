@@ -80,7 +80,9 @@ class SpectralNorm(object):
         cns = getattr(module, self.name + '_cns')
         weight_mat = self.reshape_weight_to_matrix(weight)
 
-        sigma = torch.norm(weight)
+        # sigma = torch.norm(weight)
+
+        sigma = (torch.linalg.norm(weight_mat, float('inf')) * torch.linalg.norm(weight_mat, 1))**0.5
         if sigma > 0.:
             # if do_power_iteration:
             #     with torch.no_grad():
