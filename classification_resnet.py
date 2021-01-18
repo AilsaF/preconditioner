@@ -196,7 +196,7 @@ def main():
                 'epoch': epoch + 1,
                 'state_dict': model.state_dict(),
                 'cur_prec1': prec1,
-            }, True, filename=os.path.join(args.save_dir, 'checkpoint.th'))
+            }, True, filename=os.path.join(args.save_dir, 'checkpoint{}.th'.format(epoch)))
 
         save_checkpoint({
             'state_dict': model.state_dict(),

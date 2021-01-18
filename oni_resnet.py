@@ -22,51 +22,57 @@ def _IdentityModule(x, *args, **kwargs):
     return IdentityModule()
 
 class ONINorm(torch.nn.Module):
-    def __init__(self, T=1, norm_groups=1, *args, **kwargs):
+    def __init__(self, T=2, norm_groups=1, *args, **kwargs):
         super(ONINorm, self).__init__()
         self.T = T
         self.norm_groups = norm_groups
         self.eps = 1e-5
 
-    def matrix_power3(self, Input):
-        B=torch.bmm(Input, Input)
-        return torch.bmm(B, Input)
-
-    def forward(self, weight: torch.Tensor):
-        assert weight.shape[0] % self.norm_groups == 0
-        Z = weight.view(self.norm_groups, weight.shape[0] // self.norm_groups, -1)  # type: torch.Tensor
-        Zc = Z - Z.mean(dim=-1, keepdim=True)
-        S = torch.matmul(Zc, Zc.transpose(1, 2))
-        eye = torch.eye(S.shape[-1]).to(S).expand(S.shape)
-        S = S + self.eps*eye
-        norm_S = S.norm(p='fro', dim=(1, 2), keepdim=True)
-        S = S.div(norm_S)
-        B = [torch.Tensor([]) for _ in range(self.T + 1)]
-        B[0] = torch.eye(S.shape[-1]).to(S).expand(S.shape)
-        for t in range(self.T):
-            #B[t + 1] = torch.baddbmm(1.5, B[t], -0.5, torch.matrix_power(B[t], 3), S)
-            B[t + 1] = torch.baddbmm(1.5, B[t], -0.5, self.matrix_power3(B[t]), S)
-        W = B[self.T].matmul(Zc).div_(norm_S.sqrt())
-        #print(W.matmul(W.transpose(1,2)))
-        # W = oni_py.apply(weight, self.T, ctx.groups)
-        return W.view_as(weight)
-
-    # def matrix_power32(self, Input):
-    #     B=torch.mm(Input, Input)
-    #     return torch.mm(B, Input)
+    # def matrix_power3(self, Input):
+    #     B=torch.bmm(Input, Input)
+    #     return torch.bmm(B, Input)
 
     # def forward(self, weight: torch.Tensor):
-    #     Z = weight.view(weight.shape[0], -1)
-    #     V = Z / Z.norm(p='fro')
-    #     S = V.mm(V.t())
+    #     assert weight.shape[0] % self.norm_groups == 0
+    #     Z = weight.view(self.norm_groups, weight.shape[0] // self.norm_groups, -1)  # type: torch.Tensor
+    #     # Z_ = weight.view(weight.shape[0] , -1)
+    #     # print("before", torch.svd(Z_)[1][0], torch.svd(Z_)[1][0]/torch.svd(Z_)[1][-1])
+    #     Zc = Z - Z.mean(dim=-1, keepdim=True)
+    #     S = torch.matmul(Zc, Zc.transpose(1, 2))
     #     eye = torch.eye(S.shape[-1]).to(S).expand(S.shape)
     #     S = S + self.eps*eye
+    #     norm_S = S.norm(p='fro', dim=(1, 2), keepdim=True)
+    #     S = S.div(norm_S)
     #     B = [torch.Tensor([]) for _ in range(self.T + 1)]
     #     B[0] = torch.eye(S.shape[-1]).to(S).expand(S.shape)
     #     for t in range(self.T):
-    #         B[t + 1] = 1.5*B[t]-0.5*torch.mm(self.matrix_power32(B[t]), S)
-    #     W = torch.mm(B[self.T], V)
-    #     return W.view_as(weight)
+    #         #B[t + 1] = torch.baddbmm(1.5, B[t], -0.5, torch.matrix_power(B[t], 3), S)
+    #         B[t + 1] = torch.baddbmm(1.5, B[t], -0.5, self.matrix_power3(B[t]), S)
+    #     W = B[self.T].matmul(Zc).div_(norm_S.sqrt())
+    #     #print(W.matmul(W.transpose(1,2)))
+    #     # W = oni_py.apply(weight, self.T, ctx.groups)
+    #     # Z_ = W.view_as(Z_)
+    #     # print("after", torch.svd(Z_)[1][0], torch.svd(Z_)[1][0]/torch.svd(Z_)[1][-1])
+    #     # print("===============")
+    #     W = W.view_as(weight)
+    #     return W
+
+    def matrix_power32(self, Input):
+        B=torch.mm(Input, Input)
+        return torch.mm(B, Input)
+
+    def forward(self, weight: torch.Tensor):
+        Z = weight.view(weight.shape[0], -1)
+        V = Z / Z.norm(p='fro')
+        S = V.mm(V.t())
+        eye = torch.eye(S.shape[-1]).to(S).expand(S.shape)
+        S = S + self.eps*eye
+        B = [torch.Tensor([]) for _ in range(self.T + 1)]
+        B[0] = torch.eye(S.shape[-1]).to(S).expand(S.shape)
+        for t in range(self.T):
+            B[t + 1] = 1.5*B[t]-0.5*torch.mm(self.matrix_power32(B[t]), S)
+        W = torch.mm(B[self.T], V)
+        return W.view_as(weight)
 
     def extra_repr(self):
         fmt_str = ['T={}'.format(self.T)]
@@ -76,7 +82,7 @@ class ONINorm(torch.nn.Module):
 
 
 class ONINorm_colum(torch.nn.Module):
-    def __init__(self, T=1, norm_groups=1, *args, **kwargs):
+    def __init__(self, T=2, norm_groups=1, *args, **kwargs):
         super(ONINorm_colum, self).__init__()
         self.T = T
         self.norm_groups = norm_groups
@@ -115,7 +121,7 @@ class ONINorm_colum(torch.nn.Module):
 
 class ONI_Conv2d(torch.nn.Conv2d):
     def __init__(self, in_channels, out_channels, kernel_size, stride=1, padding=0, dilation=1, groups=1, bias=True,
-                 T=1, norm_groups=1, norm_channels=0, NScale=1.414, adjustScale=False, ONIRow_Fix=False, *args, **kwargs):
+                 T=2, norm_groups=1, norm_channels=0, NScale=1.414, adjustScale=False, ONIRow_Fix=False, *args, **kwargs):
         super(ONI_Conv2d, self).__init__(in_channels, out_channels, kernel_size, stride, padding, dilation, groups, bias)
         print('ONI channels:--OD:',out_channels, '--ID:', in_channels, '--KS',kernel_size)
         if out_channels <= (in_channels*kernel_size*kernel_size):
