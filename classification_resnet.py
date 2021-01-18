@@ -18,25 +18,22 @@ import torch.utils.data
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 import resnet
-import fixup_resnet
+import oni_resnet
 from torch.optim.lr_scheduler import CosineAnnealingLR
 
 
-model_names = sorted(name for name in resnet.__dict__
-    if name.islower() and not name.startswith("__")
-                     and name.startswith("resnet")
-                     and callable(resnet.__dict__[name]))
-model_names += sorted(name for name in fixup_resnet.__dict__
-    if name.islower() and not name.startswith("__")
-    and name.startswith("fixup_resnet")
-    and callable(fixup_resnet.__dict__[name]))
-print(model_names)
+
+# model_names = sorted(name for name in oni_resnet.__dict__
+#     if name.islower() and not name.startswith("__")
+#     and name.startswith("resnetDebug")
+#     and callable(oni_resnet.__dict__[name]))
+# print(model_names)
 
 parser = argparse.ArgumentParser(description='Propert ResNets for CIFAR10 in pytorch')
-parser.add_argument('--arch', '-a', metavar='ARCH', default='fixup_resnet110',
-                    choices=model_names,
-                    help='model architecture: ' + ' | '.join(model_names) +
-                    ' (default: resnet32)')
+parser.add_argument('--arch', '-a', metavar='ARCH', default='oni_resnet110')
+                    # choices=model_names,
+                    # help='model architecture: ' + ' | '.join(model_names) +
+                    # ' (default: resnet32)')
 parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
                     help='number of data loading workers (default: 4)')
 parser.add_argument('--epochs', default=200, type=int, metavar='N',
@@ -71,14 +68,16 @@ parser.add_argument('--seed', default=0, type=int, help='seed')
 parser.add_argument('--PC', default=0, type=int, help='seed')
 parser.add_argument('--beta', default=1.0, type=float, help='beta for cutmix')
 parser.add_argument('--cutmix_prob', default=0, type=float, help='cutmix probability')
+parser.add_argument('--specname', default='', type=str)
+
 
 best_prec1 = 0
 
 args = parser.parse_args()
 # Check the save_dir exists or not
-# args.save_dir = "test_ignore" 
-args.save_dir = "cifar10_classifiction_results/cifar_{}_pc{}_lr{}_bs{}_epoch{}_cutmixprob{}_cosine_noBN_withscalar_init_diy1_seed{}".format(
-    args.arch, args.PC, args.lr, args.batch_size, args.epochs, args.cutmix_prob, args.seed)
+args.save_dir = "/home/tf6/preconditioner/cifar10_classifiction_results/test_oni{}".format(args.specname) 
+# args.save_dir = "cifar10_classifiction_results/cifar_{}_pc{}_lr{}_bs{}_epoch{}_cutmixprob{}_cosine_noBN_withscalar_init_diy1_seed{}".format(
+#     args.arch, args.PC, args.lr, args.batch_size, args.epochs, args.cutmix_prob, args.seed)
 if not os.path.exists(args.save_dir):
     os.makedirs(args.save_dir)
 file = open("{}/log.txt".format(args.save_dir),"w+") 
@@ -98,8 +97,8 @@ def main():
 
     # model = torch.nn.DataParallel(resnet.__dict__[args.arch](skipconnection=args.skip, PC=args.PC))
     # model = resnet.__dict__[args.arch]()
-    if 'fixup' in args.arch:
-        model = fixup_resnet.__dict__[args.arch](PC=args.PC)
+    if 'resnetDebug' in args.arch:
+        model = oni_resnet.__dict__[args.arch]()
     else:
         model = resnet.__dict__[args.arch](PC=args.PC)
     model.cuda()
@@ -126,7 +125,7 @@ def main():
                                      std=[0.229, 0.224, 0.225])
 
     train_loader = torch.utils.data.DataLoader(
-        datasets.CIFAR10(root='/data01/tf6/DATA/cifar10/', train=True, transform=transforms.Compose([
+        datasets.CIFAR10(root='/home/tf6/cifar10/', train=True, transform=transforms.Compose([
             transforms.RandomHorizontalFlip(),
             transforms.RandomCrop(32, 4),
             transforms.ToTensor(),
@@ -136,7 +135,7 @@ def main():
         num_workers=args.workers)
 
     val_loader = torch.utils.data.DataLoader(
-        datasets.CIFAR10(root='/data01/tf6/DATA/cifar10/', train=False, transform=transforms.Compose([
+        datasets.CIFAR10(root='/home/tf6/cifar10/', train=False, transform=transforms.Compose([
             transforms.ToTensor(),
             normalize,
         ])),
@@ -150,29 +149,29 @@ def main():
         model.half()
         criterion.half()
 
-    # optimizer = torch.optim.SGD(model.parameters(), args.lr,
-    #                             momentum=args.momentum,
-    #                             weight_decay=args.weight_decay)
-    parameters_bias = [p[1] for p in model.named_parameters() if 'bias' in p[0]]
-    parameters_scale = [p[1] for p in model.named_parameters() if 'scale' in p[0]]
-    parameters_others = [p[1] for p in model.named_parameters() if not ('bias' in p[0] or 'scale' in p[0])]
-    optimizer = torch.optim.SGD(
-            [{'params': parameters_others},
-            {'params': parameters_bias, 'lr': args.lr/10.}, 
-            {'params': parameters_scale, 'lr': args.lr/10.}], 
-            lr=args.lr, 
-            momentum=0.9, 
-            weight_decay=args.weight_decay)
+    optimizer = torch.optim.SGD(model.parameters(), args.lr,
+                                momentum=args.momentum,
+                                weight_decay=args.weight_decay)
+    # parameters_bias = [p[1] for p in model.named_parameters() if 'bias' in p[0]]
+    # parameters_scale = [p[1] for p in model.named_parameters() if 'scale' in p[0]]
+    # parameters_others = [p[1] for p in model.named_parameters() if not ('bias' in p[0] or 'scale' in p[0])]
+    # optimizer = torch.optim.SGD(
+    #         [{'params': parameters_others},
+    #         {'params': parameters_bias, 'lr': args.lr/10.}, 
+    #         {'params': parameters_scale, 'lr': args.lr/10.}], 
+    #         lr=args.lr, 
+    #         momentum=0.9, 
+    #         weight_decay=args.weight_decay)
 
-    # lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer,
-    #                                                     milestones=[100, 150], last_epoch=args.start_epoch - 1)
+    lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer,
+                                                        milestones=[100, 150], last_epoch=args.start_epoch - 1)
     # if args.arch in ['resnet1202', 'resnet110']:
     #     # for resnet1202 original paper uses lr=0.01 for first 400 minibatches for warm-up
     #     # then switch back. In this setup it will correspond for first epoch.
     #     for param_group in optimizer.param_groups:
     #         param_group['lr'] = args.lr*0.1
 
-    lr_scheduler = CosineAnnealingLR(optimizer, args.epochs, eta_min=0, last_epoch=-1)
+    # lr_scheduler = CosineAnnealingLR(optimizer, args.epochs, eta_min=0, last_epoch=-1)
 
     if args.evaluate:
         validate(val_loader, model, criterion)
