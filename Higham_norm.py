@@ -80,9 +80,9 @@ class SpectralNorm(object):
         cns = getattr(module, self.name + '_cns')
         weight_mat = self.reshape_weight_to_matrix(weight)
 
-        # sigma = torch.norm(weight)
+        sigma = torch.norm(weight)
 
-        sigma = (torch.linalg.norm(weight_mat, float('inf')) * torch.linalg.norm(weight_mat, 1))**0.5
+        # sigma = (torch.linalg.norm(weight_mat, float('inf')) * torch.linalg.norm(weight_mat, 1))**0.5
         if sigma > 0.:
             # if do_power_iteration:
             #     with torch.no_grad():
@@ -166,8 +166,8 @@ class SpectralNorm(object):
         I = torch.eye(m).cuda()
         wtw = weight.t().mm(weight)
         if pclevel == 1:
-            # weight = weight.mm(1.507 * I - 0.507 * wtw)
-            weight = weight.mm(1.2 * I - 0.2 * wtw)
+            weight = weight.mm(1.507 * I - 0.507 * wtw)
+            # weight = weight.mm(1.2 * I - 0.2 * wtw)
         elif pclevel == 2:
             weight = weight.mm(2.083 * I + wtw.mm(-1.643 * I + 0.560 * wtw))
         elif pclevel == 3:
@@ -185,8 +185,8 @@ class SpectralNorm(object):
         I = torch.eye(n).cuda()
         wwt = weight.mm(weight.t())
         if pclevel == 1:
-            # weight = (1.507 * I - 0.507 * wwt).mm(weight)
-            weight = (1.2 * I - 0.2 * wwt).mm(weight)
+            weight = (1.507 * I - 0.507 * wwt).mm(weight)
+            # weight = (1.2 * I - 0.2 * wwt).mm(weight)
         elif pclevel == 2:
             weight = (2.083 * I + wwt.mm(-1.643 * I + 0.560 * wwt)).mm(weight)
         elif pclevel == 3:
