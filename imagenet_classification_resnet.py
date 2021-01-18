@@ -32,7 +32,7 @@ print(model_names)
 parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
 parser.add_argument('--data', default='/data01/tf6/DATA/imagenet', metavar='DIR',
                     help='path to dataset')
-parser.add_argument('-a', '--arch', metavar='ARCH', default='resnetDebug18',
+parser.add_argument('-a', '--arch', metavar='ARCH', default='resnetDebug50',
                     choices=model_names,
                     help='model architecture: ' +
                         ' | '.join(model_names) +
