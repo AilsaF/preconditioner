@@ -17,25 +17,26 @@ import torch.utils.data
 import torch.utils.data.distributed
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
-import fixup_resnet_imagenet
+# import fixup_resnet_imagenet
+import oniresnet
 
 print("init amp")
 scaler = torch.cuda.amp.GradScaler()
 
-model_names = sorted(name for name in fixup_resnet_imagenet.__dict__
+model_names = sorted(name for name in oniresnet.__dict__
     if name.islower() and not name.startswith("__")
-    and name.startswith("fixup_resnet")
-    and callable(fixup_resnet_imagenet.__dict__[name]))
+    and name.startswith("resnetDebug")
+    and callable(oniresnet.__dict__[name]))
 print(model_names)
 
 parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
 parser.add_argument('--data', default='/data01/tf6/DATA/imagenet', metavar='DIR',
                     help='path to dataset')
-parser.add_argument('-a', '--arch', metavar='ARCH', default='fixup_resnet50',
+parser.add_argument('-a', '--arch', metavar='ARCH', default='resnetDebug18',
                     choices=model_names,
                     help='model architecture: ' +
                         ' | '.join(model_names) +
-                        ' (default: fixup_resnet50)')
+                        ' (default: resnetDebug18)')
 parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
                     help='number of data loading workers (default: 4)')
 parser.add_argument('--epochs', default=90, type=int, metavar='N',
@@ -84,8 +85,9 @@ parser.add_argument('--cutmix_prob', default=0, type=float, help='cutmix probabi
 
 
 args = parser.parse_args()
-args.save_dir = "imagenet_classifiction_results/imagenet_{}_pc{}_lr{}_bs{}_epoch{}_cutmixprob{}_cosine_noBN_withscalar_init_fixup_seed{}_amptest".format(
-    args.arch, args.PC, args.lr, args.batch_size, args.epochs, args.cutmix_prob, args.seed)
+args.save_dir = "imagenet_classifiction_results/testoni_resnet18"
+# args.save_dir = "imagenet_classifiction_results/imagenet_{}_pc{}_lr{}_bs{}_epoch{}_cutmixprob{}_cosine_noBN_withscalar_init_fixup_seed{}_amptest".format(
+#     args.arch, args.PC, args.lr, args.batch_size, args.epochs, args.cutmix_prob, args.seed)
 if not os.path.exists(args.save_dir):
     os.makedirs(args.save_dir)
 
@@ -152,7 +154,7 @@ def main_worker(gpu, ngpus_per_node, args):
     #     model = models.__dict__[args.arch](pretrained=True)
     # else:
     print("=> creating model '{}'".format(args.arch))
-    model = fixup_resnet_imagenet.__dict__[args.arch](PC=args.PC)
+    model = oniresnet.__dict__[args.arch]()
 
     if not torch.cuda.is_available():
         print('using CPU, this will be slow')
@@ -476,4 +478,4 @@ def accuracy(output, target, topk=(1,)):
 if __name__ == '__main__':
     main()
 
-# export MKL_NUM_THREADS=4 && CUDA_VISIBLE_DEVICES=4 python imagenet_classification_resnet.py &
+# export MKL_NUM_THREADS=4 && CUDA_VISIBLE_DEVICES=2 python imagenet_classification_resnet.py 
