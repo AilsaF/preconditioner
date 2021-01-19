@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 import Higham_norm
-
+import math
 
 __all__ = ['FixupResNet', 'fixup_resnet20', 'fixup_resnet32', 'fixup_resnet44', 'fixup_resnet56', 'fixup_resnet110', 'fixup_resnet1202']
 
@@ -29,6 +29,7 @@ class FixupBasicBlock(nn.Module):
         self.relu = nn.ReLU(inplace=True)
         self.bias2a = nn.Parameter(torch.zeros(1))
         self.conv2 = conv3x3(planes, planes, PC=PC)
+        self.scale0 = nn.Parameter(torch.ones(1))
         self.scale = nn.Parameter(torch.ones(1))
         self.bias2b = nn.Parameter(torch.zeros(1))
         self.downsample = downsample
@@ -37,7 +38,7 @@ class FixupBasicBlock(nn.Module):
         identity = x
 
         out = self.conv1(x + self.bias1a)
-        out = self.relu(out + self.bias1b)
+        out = self.relu(out * self.scale0 + self.bias1b)
 
         out = self.conv2(out + self.bias2a)
         out = out * self.scale + self.bias2b
@@ -59,6 +60,7 @@ class FixupResNet(nn.Module):
         self.num_layers = sum(layers)
         self.inplanes = 16
         self.conv1 = conv3x3(3, 16, PC=PC)
+        self.scale = nn.Parameter(torch.ones(1))
         self.bias1 = nn.Parameter(torch.zeros(1))
         self.relu = nn.ReLU(inplace=True)
         self.layer1 = self._make_layer(block, 16, layers[0], PC=PC)
@@ -91,6 +93,11 @@ class FixupResNet(nn.Module):
                 
                 nn.init.constant_(m.bias, 0)
 
+        # for m in self.modules():
+        #     if isinstance(m, nn.Conv2d):
+        #         n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
+        #         m.weight.data.normal_(0, math.sqrt(2. / n))
+
     def _make_layer(self, block, planes, blocks, stride=1, PC=0):
         downsample = None
         if stride != 1:
@@ -106,7 +113,7 @@ class FixupResNet(nn.Module):
 
     def forward(self, x):
         x = self.conv1(x)
-        x = self.relu(x + self.bias1)
+        x = self.relu(x * self.scale + self.bias1)
 
         x = self.layer1(x)
         x = self.layer2(x)

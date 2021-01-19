@@ -81,7 +81,7 @@ best_prec1 = 0
 args = parser.parse_args()
 # Check the save_dir exists or not
 # args.save_dir = "test_ignore" 
-args.save_dir = "/home/tf6/preconditioner/cifar10_classifiction_results/cifar_{}_pc{}_lr{}_bs{}_epoch{}_cutmixprob{}_{}_noBN_withscalar_init_{}_seed{}".format(
+args.save_dir = "/home/tf6/preconditioner/cifar10_classifiction_results_normdontscaleback+morescaler/cifar_{}_pc{}_lr{}_bs{}_epoch{}_cutmixprob{}_{}_noBN_withscalar_init_{}_seed{}".format(
     args.arch, args.PC, args.lr, args.batch_size, args.epochs, args.cutmix_prob, args.opt, args.init, args.seed)
 args.save_dir += '_{}'.format(args.specname) if args.specname else ''
 if not os.path.exists(args.save_dir):
@@ -166,7 +166,7 @@ def main():
         optimizer = torch.optim.SGD(
                 [{'params': parameters_others},
                 {'params': parameters_bias, 'lr': args.lr/10.}, 
-                {'params': parameters_scale, 'lr': args.lr/10.}], 
+                {'params': parameters_scale, 'lr': args.lr}], 
                 lr=args.lr, 
                 momentum=0.9, 
                 weight_decay=args.weight_decay)
@@ -201,7 +201,7 @@ def main():
             'epoch': epoch + 1,
             'state_dict': model.state_dict(),
             'cur_prec1': prec1,
-        }, True, filename=os.path.join(args.save_dir, 'checkpoint.th'))
+        }, True, filename=os.path.join(args.save_dir, 'checkpoint{}.th'.format(epoch)))
 
         save_checkpoint({
             'state_dict': model.state_dict(),
@@ -272,13 +272,15 @@ def train(train_loader, model, criterion, optimizer, epoch):
         end = time.time()
 
         if i % args.print_freq == 0:
-            file.write('Epoch: [{0}][{1}/{2}]\t'
+            msg = ('Epoch: [{0}][{1}/{2}]\t'
                   'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
                   'Data {data_time.val:.3f} ({data_time.avg:.3f})\t'
                   'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
                   'Prec@1 {top1.val:.3f} ({top1.avg:.3f})\n'.format(
                       epoch, i, len(train_loader), batch_time=batch_time,
                       data_time=data_time, loss=losses, top1=top1))
+            print(msg)
+            file.write(msg)
     train_accuracy.append(top1.avg)
     np.save('{}/train_accuracy.npy'.format(args.save_dir), train_accuracy)
 
@@ -321,12 +323,14 @@ def validate(val_loader, model, criterion):
             end = time.time()
 
             if i % args.print_freq == 0:
-                file.write('Test: [{0}/{1}]\t'
+                msg = ('Test: [{0}/{1}]\t'
                       'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
                       'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
                       'Prec@1 {top1.val:.3f} ({top1.avg:.3f})\n'.format(
                           i, len(val_loader), batch_time=batch_time, loss=losses,
                           top1=top1))
+                print(msg)
+                file.write(msg)
 
     file.write(' * Prec@1 {top1.avg:.3f}\n'.format(top1=top1))
     val_accuracy.append(top1.avg)
