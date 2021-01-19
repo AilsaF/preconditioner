@@ -78,6 +78,9 @@ class FixupResNet(nn.Module):
                     nn.init.normal_(m.conv1.weight, mean=0, std=np.sqrt(2. / (m.conv1.weight.shape[0] * np.prod(m.conv1.weight.shape[2:]))) * self.num_layers ** (-0.25))
                     nn.init.normal_(m.conv2.weight, mean=0, std=np.sqrt(2. / (m.conv2.weight.shape[0] * np.prod(m.conv2.weight.shape[2:]))) * self.num_layers ** (-0.25))
                     # nn.init.constant_(m.conv2.weight, 0)
+                elif init == 'kaiming':
+                    nn.init.kaiming_normal_(m.conv1.weight, mode='fan_out', nonlinearity='relu')
+                    nn.init.kaiming_normal_(m.conv2.weight, mode='fan_out', nonlinearity='relu')
                 else:
                     nn.init.orthogonal_(m.conv1.weight, gain=self.num_layers ** (-0.5))
                     nn.init.orthogonal_(m.conv2.weight, gain=self.num_layers ** (-0.5))
@@ -86,12 +89,14 @@ class FixupResNet(nn.Module):
                 # nn.init.constant_(m.weight, 0)
                 # nn.init.orthogonal_(m.weight, gain=self.num_layers ** (-0.5))
                 
-                nn.init.normal_(m.weight, mean=0, std=np.sqrt(2. / m.weight.shape[0]) * self.num_layers ** (-0.5))
+                # nn.init.normal_(m.weight, mean=0, std=np.sqrt(2. / m.weight.shape[0]) * self.num_layers ** (-0.5))
                 # w = m.weight.data
                 # singular = torch.svd(w)[1][0]
                 # nn.init.orthogonal_(m.weight, gain=singular)
                 
-                # nn.init.constant_(m.bias, 0)
+                #kaiming
+                nn.init.kaiming_normal_(m.weight, mode='fan_out')
+                nn.init.constant_(m.bias, 0)
 
         # for m in self.modules():
         #     if isinstance(m, nn.Conv2d):
