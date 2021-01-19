@@ -1,10 +1,97 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import numpy as np
-import Higham_norm
+# import Higham_norm
 import math
 
 __all__ = ['FixupResNet', 'fixup_resnet20', 'fixup_resnet32', 'fixup_resnet44', 'fixup_resnet56', 'fixup_resnet110', 'fixup_resnet1202']
+
+class PCLayer(torch.nn.Module):
+    def __init__(self, use_adaptivePC=False, pclevel=0, *args, **kwargs):
+        super(PCLayer, self).__init__()
+        self.use_adaptivePC = use_adaptivePC
+        self.pclevel = pclevel
+        self.called_time = 0
+
+    def preconditionertall(self, weight, pclevel):
+        if pclevel == 0:
+            return weight
+        n, m = weight.shape
+        I = torch.eye(m).cuda()
+        wtw = weight.t().mm(weight)
+        if pclevel == 1:
+            weight = weight.mm(1.507 * I - 0.507 * wtw)
+        elif pclevel == 2:
+            weight = weight.mm(2.083 * I + wtw.mm(-1.643 * I + 0.560 * wtw))
+        elif pclevel == 3:
+            weight = weight.mm(2.909 * I + wtw.mm(-4.649 * I + wtw.mm(4.023 * I - 1.283 * wtw)))
+        elif pclevel == 4:
+            weight = weight.mm(3.625 * I + wtw.mm(-9.261 * I + wtw.mm(14.097 * I + wtw.mm(-10.351 * I + 2.890 * wtw))))
+        else:
+            raise ValueError("No pre-conditioner provided")
+        return weight
+
+    def preconditionerwide(self, weight, pclevel):
+        if pclevel == 0:
+            return weight
+        n, m = weight.shape
+        I = torch.eye(n).cuda()
+        wwt = weight.mm(weight.t())
+        if pclevel == 1:
+            weight = (1.507 * I - 0.507 * wwt).mm(weight)
+        elif pclevel == 2:
+            weight = (2.083 * I + wwt.mm(-1.643 * I + 0.560 * wwt)).mm(weight)
+        elif pclevel == 3:
+            weight = (2.909 * I + wwt.mm(-4.649 * I + wwt.mm(4.023 * I - 1.283 * wwt))).mm(weight)
+        elif pclevel == 4:
+            weight = (3.625 * I + wwt.mm(-9.261 * I + wwt.mm(14.097 * I + wwt.mm(-10.351 * I + 2.890 * wwt)))).mm(
+                weight)
+        else:
+            raise ValueError("No pre-conditioner provided")
+        return weight
+
+    def forward(self, weight):
+        weight_shape = weight.shape
+        weight = weight.view(weight.shape[0], -1)
+        sigma = torch.norm(weight)
+        if sigma > 0.:
+            weight = weight / sigma
+            # if len(weight.shape) > 2:
+            if self.pclevel:
+                n, m = weight.shape
+                if n >= m:
+                    weight = self.preconditionertall(weight, self.pclevel)
+                else:
+                    weight = self.preconditionerwide(weight, self.pclevel)
+                weight = weight.view(weight_shape)
+            return weight #* sigma
+        else:
+            return weight.view(weight_shape) #* torch.tensor(1.)
+
+
+class PC_Conv2d(torch.nn.Conv2d):
+    def __init__(self, in_channels, out_channels, kernel_size, stride=1, padding=0, dilation=1, groups=1, bias=True,
+                 use_adaptivePC=False, pclevel=0, *args, **kwargs):
+        super(PC_Conv2d, self).__init__(in_channels, out_channels, kernel_size, stride, padding, dilation, groups, bias)
+        self.PCLayer = PCLayer(use_adaptivePC=use_adaptivePC, pclevel=pclevel)
+        print(self._get_name(), use_adaptivePC, pclevel)
+
+    def forward(self, input):
+        pcweight = self.PCLayer(self.weight)
+        out = F.conv2d(input, pcweight, self.bias, self.stride, self.padding, self.dilation, self.groups)
+        return out
+
+class PC_Linear(torch.nn.Linear):
+    def __init__(self, in_channels, out_channels, bias=True, use_adaptivePC=False, pclevel=0, *args, **kwargs):
+        super(PC_Linear, self).__init__(in_channels, out_channels, bias)
+        self.PCLayer = PCLayer(use_adaptivePC=use_adaptivePC, pclevel=pclevel)
+        print(self._get_name(), use_adaptivePC, pclevel)
+    
+    def forward(self, input):
+        pcweight = self.PCLayer(self.weight)
+        out = F.linear(input, pcweight, self.bias)
+        return out
 
 
 def conv3x3(in_planes, out_planes, stride=1, PC=0):
@@ -13,8 +100,8 @@ def conv3x3(in_planes, out_planes, stride=1, PC=0):
         return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
                      padding=1, bias=False)
     else:
-        return Higham_norm.spectral_norm(nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
-                     padding=1, bias=False), use_adaptivePC=False, pclevel=PC)
+        return PC_Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
+                     padding=1, bias=False, use_adaptivePC=False, pclevel=PC)
 
 
 class FixupBasicBlock(nn.Module):
@@ -71,7 +158,7 @@ class FixupResNet(nn.Module):
         if PC == 0:
             self.fc = nn.Linear(64, num_classes)
         else:
-            self.fc = Higham_norm.spectral_norm(nn.Linear(64, num_classes), use_adaptivePC=False, pclevel=PC)
+            self.fc = PC_Linear(64, num_classes, use_adaptivePC=False, pclevel=PC)
         for m in self.modules():
             if isinstance(m, FixupBasicBlock):
                 if init == 'fixup':
