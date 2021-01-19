@@ -23,28 +23,28 @@ class FixupBasicBlock(nn.Module):
     def __init__(self, inplanes, planes, stride=1, downsample=None, PC=0):
         super(FixupBasicBlock, self).__init__()
         # Both self.conv1 and self.downsample layers downsample the input when stride != 1
-        self.bias1a = nn.Parameter(torch.zeros(1))
+        # self.bias1a = nn.Parameter(torch.zeros(1))
         self.conv1 = conv3x3(inplanes, planes, stride, PC=PC)
-        self.bias1b = nn.Parameter(torch.zeros(1))
+        # self.bias1b = nn.Parameter(torch.zeros(1))
         self.relu = nn.ReLU(inplace=True)
-        self.bias2a = nn.Parameter(torch.zeros(1))
+        # self.bias2a = nn.Parameter(torch.zeros(1))
         self.conv2 = conv3x3(planes, planes, PC=PC)
         self.scale0 = nn.Parameter(torch.ones(1))
         self.scale = nn.Parameter(torch.ones(1))
-        self.bias2b = nn.Parameter(torch.zeros(1))
+        # self.bias2b = nn.Parameter(torch.zeros(1))
         self.downsample = downsample
 
     def forward(self, x):
         identity = x
 
-        out = self.conv1(x + self.bias1a)
-        out = self.relu(out * self.scale0 + self.bias1b)
+        out = self.conv1(x )
+        out = self.relu(out * self.scale0 )
 
-        out = self.conv2(out + self.bias2a)
-        out = out * self.scale + self.bias2b
+        out = self.conv2(out )
+        out = out * self.scale 
 
         if self.downsample is not None:
-            identity = self.downsample(x + self.bias1a)
+            identity = self.downsample(x )
             identity = torch.cat((identity, torch.zeros_like(identity)), 1)
 
         out += identity
@@ -61,13 +61,13 @@ class FixupResNet(nn.Module):
         self.inplanes = 16
         self.conv1 = conv3x3(3, 16, PC=PC)
         self.scale = nn.Parameter(torch.ones(1))
-        self.bias1 = nn.Parameter(torch.zeros(1))
+        # self.bias1 = nn.Parameter(torch.zeros(1))
         self.relu = nn.ReLU(inplace=True)
         self.layer1 = self._make_layer(block, 16, layers[0], PC=PC)
         self.layer2 = self._make_layer(block, 32, layers[1], stride=2, PC=PC)
         self.layer3 = self._make_layer(block, 64, layers[2], stride=2, PC=PC)
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self.bias2 = nn.Parameter(torch.zeros(1))
+        # self.bias2 = nn.Parameter(torch.zeros(1))
         if PC == 0:
             self.fc = nn.Linear(64, num_classes)
         else:
@@ -118,7 +118,7 @@ class FixupResNet(nn.Module):
 
     def forward(self, x):
         x = self.conv1(x)
-        x = self.relu(x * self.scale + self.bias1)
+        x = self.relu(x * self.scale)
 
         x = self.layer1(x)
         x = self.layer2(x)
@@ -126,7 +126,7 @@ class FixupResNet(nn.Module):
 
         x = self.avgpool(x)
         x = x.view(x.size(0), -1)
-        x = self.fc(x + self.bias2)
+        x = self.fc(x )
 
         return x
 
