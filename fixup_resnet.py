@@ -12,48 +12,85 @@ class PCLayer(torch.nn.Module):
         super(PCLayer, self).__init__()
         self.use_adaptivePC = use_adaptivePC
         self.pclevel = pclevel
+        self.cns = torch.tensor([]).cuda()
         self.called_time = 0
         self.In = None
         self.Im = None
 
-    def preconditionertall(self, weight, pclevel):
-        if pclevel == 0:
+    def preconditionertall(self, weight):
+        if self.pclevel == 0:
             return weight
+
         if self.Im is None:
             n, m = weight.shape
             self.Im = torch.eye(m, device=torch.device('cuda'))
         wtw = weight.t().mm(weight)
-        if pclevel == 1:
+        if self.pclevel == 1:
             weight = weight.mm(1.507 * self.Im - 0.507 * wtw)
-        elif pclevel == 2:
+        elif self.pclevel == 2:
             weight = weight.mm(2.083 * self.Im + wtw.mm(-1.643 * self.Im + 0.560 * wtw))
-        elif pclevel == 3:
+        # elif self.pclevel == 2.5:
+        #     weight = weight.mm(2.615 * self.Im + wtw.mm(-3.548 * self.Im + wtw.mm(2.727 * self.Im - 0.795 * wtw)))
+        elif self.pclevel == 3:
             weight = weight.mm(2.909 * self.Im + wtw.mm(-4.649 * self.Im + wtw.mm(4.023 * self.Im - 1.283 * wtw)))
-        elif pclevel == 4:
+        # elif self.pclevel == 3.5:
+        #     weight = weight.mm(3.418 * self.Im + wtw.mm(-8.029 * self.Im + wtw.mm(11.552 * self.Im + wtw.mm(-8.152 * self.Im + 2.211 * wtw))))
+        elif self.pclevel == 4:
             weight = weight.mm(3.625 * self.Im + wtw.mm(-9.261 * self.Im + wtw.mm(14.097 * self.Im + wtw.mm(-10.351 * self.Im + 2.890 * wtw))))
+        elif self.pclevel == 5:
+            weight = weight.mm(4.230 * self.Im + wtw.mm(-13.367 * self.Im + wtw.mm(23.356 * self.Im + wtw.mm(-18.866 * self.Im + 5.646* wtw))))
         else:
             raise ValueError("No pre-conditioner provided")
         return weight
 
-    def preconditionerwide(self, weight, pclevel):
-        if pclevel == 0:
+    def preconditionerwide(self, weight):
+        if self.pclevel == 0:
             return weight
+
         n, m = weight.shape
         if self.In is None:
             self.In = torch.eye(n, device=torch.device('cuda'))
         wwt = weight.mm(weight.t())
-        if pclevel == 1:
+        if self.pclevel == 1:
             weight = (1.507 * self.In - 0.507 * wwt).mm(weight)
-        elif pclevel == 2:
+        elif self.pclevel == 2:
             weight = (2.083 * self.In + wwt.mm(-1.643 * self.In + 0.560 * wwt)).mm(weight)
-        elif pclevel == 3:
+        # elif self.pclevel == 2.5:
+        #     weight = (2.615 * self.In + wwt.mm(-3.548 * self.In + wwt.mm(2.727 * self.In - 0.795 * wwt))).mm(weight)
+        elif self.pclevel == 3:
             weight = (2.909 * self.In + wwt.mm(-4.649 * self.In + wwt.mm(4.023 * self.In - 1.283 * wwt))).mm(weight)
-        elif pclevel == 4:
+        # elif self.pclevel == 3.5:
+        #     weight = (3.418 * self.In + wwt.mm(-8.029 * self.In + wwt.mm(11.552 * self.In + wwt.mm(-8.152 * self.In + 2.211 * wwt)))).mm(
+        #         weight)
+        elif self.pclevel == 4:
             weight = (3.625 * self.In + wwt.mm(-9.261 * self.In + wwt.mm(14.097 * self.In + wwt.mm(-10.351 * self.In + 2.890 * wwt)))).mm(
+                weight)
+        elif self.pclevel == 5:
+            weight = (4.230 * self.In + wwt.mm(-13.367 * self.In + wwt.mm(23.356 * self.In + wwt.mm(-18.866 * self.In + 5.646 * wwt)))).mm(
                 weight)
         else:
             raise ValueError("No pre-conditioner provided")
         return weight
+
+    def adaptive(self, weight):
+        if self.use_adaptivePC and self.called_time % (470*20) == 0:
+            weight = weight.detach()
+            S = torch.svd(weight)[1]
+            sin_num = max(1, int(S.shape[0] * 0.1))
+            condition_number = 1. / (S[-sin_num:]).mean()
+            # print(self.cns.device)
+            self.cns.data = torch.cat((self.cns.view(-1), condition_number.view(1)))[-5:]
+            recent_cn_avg = self.cns.mean()
+            if recent_cn_avg <= 5:
+                self.pclevel = 2
+            elif 5 < recent_cn_avg <= 10:
+                self.pclevel = 3
+            elif 10 < recent_cn_avg <= 20:
+                self.pclevel = 4
+            else:
+                self.pclevel = 5
+            print("CNs are {}, change preconditioner iteration to {}".format(self.cns, self.pclevel))
+        self.called_time += 1
 
     def forward(self, weight):
         weight_shape = weight.shape
@@ -62,13 +99,13 @@ class PCLayer(torch.nn.Module):
         # sigma = (torch.linalg.norm(weight, float('inf')) * torch.linalg.norm(weight, 1)) ** 0.5
         if sigma > 0.:
             weight = weight / sigma
-            # if len(weight.shape) > 2:
+            self.adaptive(weight)
             if self.pclevel:
                 n, m = weight.shape
                 if n >= m:
-                    weight = self.preconditionertall(weight, self.pclevel)
+                    weight = self.preconditionertall(weight)
                 else:
-                    weight = self.preconditionerwide(weight, self.pclevel)
+                    weight = self.preconditionerwide(weight)
                 weight = weight.view(weight_shape)
             return weight #* sigma
         else:
@@ -86,6 +123,7 @@ class PC_Conv2d(torch.nn.Conv2d):
         pcweight = self.PCLayer(self.weight)
         out = F.conv2d(input, pcweight, self.bias, self.stride, self.padding, self.dilation, self.groups)
         return out
+
 
 class PC_Linear(torch.nn.Linear):
     def __init__(self, in_channels, out_channels, bias=True, use_adaptivePC=False, pclevel=0, *args, **kwargs):
@@ -106,7 +144,7 @@ def conv3x3(in_planes, out_planes, stride=1, PC=0):
                      padding=1, bias=False)
     else:
         return PC_Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
-                     padding=1, bias=False, use_adaptivePC=False, pclevel=PC)
+                     padding=1, bias=False, use_adaptivePC=True, pclevel=PC)
 
 
 class FixupBasicBlock(nn.Module):
@@ -163,13 +201,13 @@ class FixupResNet(nn.Module):
         if PC == 0:
             self.fc = nn.Linear(64, num_classes)
         else:
-            self.fc = PC_Linear(64, num_classes, use_adaptivePC=False, pclevel=PC)
+            self.fc = PC_Linear(64, num_classes, use_adaptivePC=True, pclevel=PC)
         for m in self.modules():
             if isinstance(m, FixupBasicBlock):
                 if init == 'fixup':
-                    nn.init.normal_(m.conv1.weight, mean=0, std=np.sqrt(2. / (m.conv1.weight.shape[0] * np.prod(m.conv1.weight.shape[2:]))) * self.num_layers ** (-0.25))
-                    nn.init.normal_(m.conv2.weight, mean=0, std=np.sqrt(2. / (m.conv2.weight.shape[0] * np.prod(m.conv2.weight.shape[2:]))) * self.num_layers ** (-0.25))
-                    # nn.init.constant_(m.conv2.weight, 0)
+                    nn.init.normal_(m.conv1.weight, mean=0, std=np.sqrt(2. / (m.conv1.weight.shape[0] * np.prod(m.conv1.weight.shape[2:]))) * self.num_layers ** (-0.5))
+                    # nn.init.normal_(m.conv2.weight, mean=0, std=np.sqrt(2. / (m.conv2.weight.shape[0] * np.prod(m.conv2.weight.shape[2:]))) * self.num_layers ** (-0.25))
+                    nn.init.constant_(m.conv2.weight, 0)
                 elif init == 'kaiming':
                     nn.init.kaiming_normal_(m.conv1.weight, mode='fan_out', nonlinearity='relu')
                     nn.init.kaiming_normal_(m.conv2.weight, mode='fan_out', nonlinearity='relu')
@@ -178,16 +216,14 @@ class FixupResNet(nn.Module):
                     nn.init.orthogonal_(m.conv2.weight, gain=self.num_layers ** (-0.5))
                 
             elif isinstance(m, nn.Linear):
-                # nn.init.constant_(m.weight, 0)
-                # nn.init.orthogonal_(m.weight, gain=self.num_layers ** (-0.5))
-                
-                # nn.init.normal_(m.weight, mean=0, std=np.sqrt(2. / m.weight.shape[0]) * self.num_layers ** (-0.5))
-                # w = m.weight.data
-                # singular = torch.svd(w)[1][0]
-                # nn.init.orthogonal_(m.weight, gain=singular)
-                
-                #kaiming
-                nn.init.kaiming_normal_(m.weight, mode='fan_out')
+                if init == 'fixup':
+                    nn.init.constant_(m.weight, 0)
+                    # nn.init.normal_(m.weight, mean=0, std=np.sqrt(2. / m.weight.shape[0]) * self.num_layers ** (-0.5))
+                # kaiming
+                elif init == 'kaiming':
+                    nn.init.kaiming_normal_(m.weight, mode='fan_out')
+                else:
+                    nn.init.orthogonal_(m.weight, gain=self.num_layers ** (-0.5))
                 nn.init.constant_(m.bias, 0)
 
         # for m in self.modules():

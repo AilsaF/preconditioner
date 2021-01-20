@@ -68,7 +68,7 @@ parser.add_argument('--save-every', dest='save_every',
                     help='Saves checkpoints at every specified number of epochs',
                     type=int, default=10)
 parser.add_argument('--seed', default=0, type=int, help='seed')
-parser.add_argument('--PC', default=0, type=int, help='seed')
+parser.add_argument('--PC', default=0, type=float, help='seed')
 parser.add_argument('--beta', default=1.0, type=float, help='beta for cutmix')
 parser.add_argument('--cutmix_prob', default=0, type=float, help='cutmix probability')
 parser.add_argument('--opt', default='steplr', type=str)
@@ -107,6 +107,7 @@ def main():
         model = fixup_resnet.__dict__[args.arch](PC=args.PC, init=args.init)
     else:
         model = resnet.__dict__[args.arch]()
+    model = torch.nn.DataParallel(model)
     model.cuda()
     # model.apply(init_ortho_weights)
     file.write(str(model))
