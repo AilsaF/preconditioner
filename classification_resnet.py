@@ -137,7 +137,7 @@ def main():
             transforms.ToTensor(),
             normalize,
         ]), download=True),
-        batch_size=args.batch_size, shuffle=True,
+        batch_size=args.batch_size, shuffle=True, pin_memory=True,
         num_workers=args.workers)
 
     val_loader = torch.utils.data.DataLoader(
@@ -145,7 +145,7 @@ def main():
             transforms.ToTensor(),
             normalize,
         ])),
-        batch_size=128, shuffle=False,
+        batch_size=128, shuffle=False, pin_memory=True,
         num_workers=args.workers)
 
     # define loss function (criterion) and optimizer

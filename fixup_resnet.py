@@ -13,21 +13,24 @@ class PCLayer(torch.nn.Module):
         self.use_adaptivePC = use_adaptivePC
         self.pclevel = pclevel
         self.called_time = 0
+        self.In = None
+        self.Im = None
 
     def preconditionertall(self, weight, pclevel):
         if pclevel == 0:
             return weight
-        n, m = weight.shape
-        I = torch.eye(m).cuda()
+        if self.Im is None:
+            n, m = weight.shape
+            self.Im = torch.eye(m, device=torch.device('cuda'))
         wtw = weight.t().mm(weight)
         if pclevel == 1:
-            weight = weight.mm(1.507 * I - 0.507 * wtw)
+            weight = weight.mm(1.507 * self.Im - 0.507 * wtw)
         elif pclevel == 2:
-            weight = weight.mm(2.083 * I + wtw.mm(-1.643 * I + 0.560 * wtw))
+            weight = weight.mm(2.083 * self.Im + wtw.mm(-1.643 * self.Im + 0.560 * wtw))
         elif pclevel == 3:
-            weight = weight.mm(2.909 * I + wtw.mm(-4.649 * I + wtw.mm(4.023 * I - 1.283 * wtw)))
+            weight = weight.mm(2.909 * self.Im + wtw.mm(-4.649 * self.Im + wtw.mm(4.023 * self.Im - 1.283 * wtw)))
         elif pclevel == 4:
-            weight = weight.mm(3.625 * I + wtw.mm(-9.261 * I + wtw.mm(14.097 * I + wtw.mm(-10.351 * I + 2.890 * wtw))))
+            weight = weight.mm(3.625 * self.Im + wtw.mm(-9.261 * self.Im + wtw.mm(14.097 * self.Im + wtw.mm(-10.351 * self.Im + 2.890 * wtw))))
         else:
             raise ValueError("No pre-conditioner provided")
         return weight
@@ -36,16 +39,17 @@ class PCLayer(torch.nn.Module):
         if pclevel == 0:
             return weight
         n, m = weight.shape
-        I = torch.eye(n).cuda()
+        if self.In is None:
+            self.In = torch.eye(n, device=torch.device('cuda'))
         wwt = weight.mm(weight.t())
         if pclevel == 1:
-            weight = (1.507 * I - 0.507 * wwt).mm(weight)
+            weight = (1.507 * self.In - 0.507 * wwt).mm(weight)
         elif pclevel == 2:
-            weight = (2.083 * I + wwt.mm(-1.643 * I + 0.560 * wwt)).mm(weight)
+            weight = (2.083 * self.In + wwt.mm(-1.643 * self.In + 0.560 * wwt)).mm(weight)
         elif pclevel == 3:
-            weight = (2.909 * I + wwt.mm(-4.649 * I + wwt.mm(4.023 * I - 1.283 * wwt))).mm(weight)
+            weight = (2.909 * self.In + wwt.mm(-4.649 * self.In + wwt.mm(4.023 * self.In - 1.283 * wwt))).mm(weight)
         elif pclevel == 4:
-            weight = (3.625 * I + wwt.mm(-9.261 * I + wwt.mm(14.097 * I + wwt.mm(-10.351 * I + 2.890 * wwt)))).mm(
+            weight = (3.625 * self.In + wwt.mm(-9.261 * self.In + wwt.mm(14.097 * self.In + wwt.mm(-10.351 * self.In + 2.890 * wwt)))).mm(
                 weight)
         else:
             raise ValueError("No pre-conditioner provided")
@@ -55,6 +59,7 @@ class PCLayer(torch.nn.Module):
         weight_shape = weight.shape
         weight = weight.view(weight.shape[0], -1)
         sigma = torch.norm(weight)
+        # sigma = (torch.linalg.norm(weight, float('inf')) * torch.linalg.norm(weight, 1)) ** 0.5
         if sigma > 0.:
             weight = weight / sigma
             # if len(weight.shape) > 2:
@@ -110,28 +115,28 @@ class FixupBasicBlock(nn.Module):
     def __init__(self, inplanes, planes, stride=1, downsample=None, PC=0):
         super(FixupBasicBlock, self).__init__()
         # Both self.conv1 and self.downsample layers downsample the input when stride != 1
-        # self.bias1a = nn.Parameter(torch.zeros(1))
+        self.bias1a = nn.Parameter(torch.zeros(1))
         self.conv1 = conv3x3(inplanes, planes, stride, PC=PC)
-        # self.bias1b = nn.Parameter(torch.zeros(1))
+        self.bias1b = nn.Parameter(torch.zeros(1))
         self.relu = nn.ReLU(inplace=True)
-        # self.bias2a = nn.Parameter(torch.zeros(1))
+        self.bias2a = nn.Parameter(torch.zeros(1))
         self.conv2 = conv3x3(planes, planes, PC=PC)
         self.scale0 = nn.Parameter(torch.ones(1))
         self.scale = nn.Parameter(torch.ones(1))
-        # self.bias2b = nn.Parameter(torch.zeros(1))
+        self.bias2b = nn.Parameter(torch.zeros(1))
         self.downsample = downsample
 
     def forward(self, x):
         identity = x
 
-        out = self.conv1(x )
-        out = self.relu(out * self.scale0 )
+        out = self.conv1(x + self.bias1a)
+        out = self.relu(out * self.scale0 + self.bias1b)
 
-        out = self.conv2(out )
-        out = out * self.scale 
+        out = self.conv2(out + self.bias2a)
+        out = out * self.scale + self.bias2b
 
         if self.downsample is not None:
-            identity = self.downsample(x )
+            identity = self.downsample(x + self.bias1a)
             identity = torch.cat((identity, torch.zeros_like(identity)), 1)
 
         out += identity
@@ -148,13 +153,13 @@ class FixupResNet(nn.Module):
         self.inplanes = 16
         self.conv1 = conv3x3(3, 16, PC=PC)
         self.scale = nn.Parameter(torch.ones(1))
-        # self.bias1 = nn.Parameter(torch.zeros(1))
+        self.bias1 = nn.Parameter(torch.zeros(1))
         self.relu = nn.ReLU(inplace=True)
         self.layer1 = self._make_layer(block, 16, layers[0], PC=PC)
         self.layer2 = self._make_layer(block, 32, layers[1], stride=2, PC=PC)
         self.layer3 = self._make_layer(block, 64, layers[2], stride=2, PC=PC)
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        # self.bias2 = nn.Parameter(torch.zeros(1))
+        self.bias2 = nn.Parameter(torch.zeros(1))
         if PC == 0:
             self.fc = nn.Linear(64, num_classes)
         else:
@@ -205,7 +210,7 @@ class FixupResNet(nn.Module):
 
     def forward(self, x):
         x = self.conv1(x)
-        x = self.relu(x * self.scale)
+        x = self.relu(x * self.scale + self.bias1)
 
         x = self.layer1(x)
         x = self.layer2(x)
@@ -213,7 +218,7 @@ class FixupResNet(nn.Module):
 
         x = self.avgpool(x)
         x = x.view(x.size(0), -1)
-        x = self.fc(x )
+        x = self.fc(x + self.bias2)
 
         return x
 
