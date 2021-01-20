@@ -81,11 +81,13 @@ parser.add_argument('--multiprocessing-distributed', action='store_true',
                          'multi node data parallel training')
 parser.add_argument('--PC', default=0, type=int, help='precondition level')
 parser.add_argument('--cutmix_prob', default=0, type=float, help='cutmix probability')
+parser.add_argument('--specname', default='', type=str)
+parser.add_argument('--init', default='fixup', type=str)
 
 
 args = parser.parse_args()
-args.save_dir = "imagenet_classifiction_results/imagenet_{}_pc{}_lr{}_bs{}_epoch{}_cutmixprob{}_cosine_noBN_withscalar_init_fixup_seed{}_amptest".format(
-    args.arch, args.PC, args.lr, args.batch_size, args.epochs, args.cutmix_prob, args.seed)
+args.save_dir = "imagenet_classifiction_results/imagenet_{}_pc{}_lr{}_bs{}_epoch{}_cutmixprob{}_cosine_noBN_withscalar_init_{}_seed{}_{}_amptest".format(
+    args.arch, args.PC, args.lr, args.batch_size, args.epochs, args.cutmix_prob, args.init, args.seed, args.specname)
 if not os.path.exists(args.save_dir):
     os.makedirs(args.save_dir)
 
@@ -152,7 +154,7 @@ def main_worker(gpu, ngpus_per_node, args):
     #     model = models.__dict__[args.arch](pretrained=True)
     # else:
     print("=> creating model '{}'".format(args.arch))
-    model = fixup_resnet_imagenet.__dict__[args.arch](PC=args.PC)
+    model = fixup_resnet_imagenet.__dict__[args.arch](PC=args.PC, init=args.init)
 
     if not torch.cuda.is_available():
         print('using CPU, this will be slow')
@@ -197,7 +199,7 @@ def main_worker(gpu, ngpus_per_node, args):
     optimizer = torch.optim.SGD(
         [{'params': parameters_others},
         {'params': parameters_bias, 'lr': args.lr/10.},
-        {'params': parameters_scale, 'lr': args.lr/10.}],
+        {'params': parameters_scale, 'lr': args.lr/1.}],
         lr=args.lr, #base_learning_rate,
         momentum=args.momentum,
         weight_decay=args.weight_decay)
@@ -477,3 +479,5 @@ if __name__ == '__main__':
     main()
 
 # export MKL_NUM_THREADS=4 && CUDA_VISIBLE_DEVICES=4 python imagenet_classification_resnet.py &
+
+# export MKL_NUM_THREADS=4 && CUDA_VISIBLE_DEVICES=4 python imagenet_classification_resnet.py --PC 3 --init kaiming &
