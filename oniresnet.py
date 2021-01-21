@@ -53,11 +53,11 @@ class ONI_Conv2d(torch.nn.Conv2d):
         super(ONI_Conv2d, self).__init__(in_channels, out_channels, kernel_size, stride, padding, dilation, groups, bias)
         print('ONI channels:--OD:',out_channels, '--ID:', in_channels, '--KS',kernel_size)
         self.weight_normalization = ONINorm(T=T, norm_groups=1)
-        self.WNScale = 1.414 # Parameter([1.414])
+        # self.WNScale = 1.414 # Parameter([1.414])
 
     def forward(self, input_f: torch.Tensor) -> torch.Tensor:
         weight_q = self.weight_normalization(self.weight)
-        weight_q = weight_q * self.WNScale
+        # weight_q = weight_q * self.WNScale
         out = F.conv2d(input_f, weight_q, self.bias, self.stride, self.padding, self.dilation, self.groups)
         return out
 
@@ -66,11 +66,11 @@ class ONI_Linear(torch.nn.Linear):
                  T=7, norm_groups=1, norm_channels=0, NScale=1, adjustScale=False, *args, **kwargs):
         super(ONI_Linear, self).__init__(in_channels, out_channels, bias)
         self.weight_normalization = ONINorm(T=T, norm_groups=1)
-        self.WNScale = 1.414 
+        # self.WNScale = 1.414 
 
     def forward(self, input_f: torch.Tensor) -> torch.Tensor:
         weight_q = self.weight_normalization(self.weight)
-        weight_q = weight_q * self.WNScale
+        # weight_q = weight_q * self.WNScale
         out = F.linear(input_f, weight_q, self.bias)
         return out
 
@@ -100,16 +100,17 @@ class BasicBlock(nn.Module):
         self.bias1b = nn.Parameter(torch.zeros(1))
         self.bias2a = nn.Parameter(torch.zeros(1))
         self.bias2b = nn.Parameter(torch.zeros(1))
+        self.scale1 = nn.Parameter(torch.ones(1)*1.414)
+        self.scale2 = nn.Parameter(torch.ones(1)*1.414)
         
-
     def forward(self, x):
         identity = x
 
         out = self.conv1(x + self.bias1a)
-        out = self.relu(out + self.bias1b)
+        out = self.relu(out * self.scale1 + self.bias1b)
 
         out = self.conv2(out + self.bias2a)
-        out = out + self.bias2b
+        out = out * self.scale2 + self.bias2b
 
         if self.downsample is not None:
             identity = self.downsample(x + self.bias1a)
@@ -138,19 +139,21 @@ class Bottleneck(nn.Module):
         self.bias2b = nn.Parameter(torch.zeros(1))
         self.bias3a = nn.Parameter(torch.zeros(1))
         self.bias3b = nn.Parameter(torch.zeros(1))
+        self.scale1 = nn.Parameter(torch.ones(1)*1.414)
+        self.scale2 = nn.Parameter(torch.ones(1)*1.414)
+        self.scale3 = nn.Parameter(torch.ones(1)*1.414)
         
-
     def forward(self, x):
         identity = x
 
         out = self.conv1(x + self.bias1a)
-        out = self.relu(out + self.bias1b)
+        out = self.relu(out * self.scale1 + self.bias1b)
 
         out = self.conv2(out + self.bias2a)
-        out = self.relu(out + self.bias2b)
+        out = self.relu(out * self.scale2 + self.bias2b)
 
         out = self.conv3(out + self.bias3a)
-        out = out  + self.bias3b
+        out = out * self.scale3 + self.bias3b
 
         if self.downsample is not None:
             identity = self.downsample(x + self.bias1a)
@@ -180,6 +183,7 @@ class ResNetDebug(nn.Module):
         self.fc = ONI_Linear(512 * block.expansion, num_classes, adjustScale=True)
         self.bias1 = nn.Parameter(torch.zeros(1))
         self.bias2 = nn.Parameter(torch.zeros(1))
+        self.scale1 = nn.Parameter(torch.ones(1)*1.414)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -208,7 +212,7 @@ class ResNetDebug(nn.Module):
 
     def forward(self, x):
         x = self.conv1(x)
-        x = self.relu(x + self.bias1)
+        x = self.relu(x * self.scale1 + self.bias1)
         x = self.maxpool(x)
 
         x = self.layer1(x)
