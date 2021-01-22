@@ -142,7 +142,7 @@ class Bottleneck(nn.Module):
         self.scale1 = nn.Parameter(torch.ones(1)*1.414)
         self.scale2 = nn.Parameter(torch.ones(1)*1.414)
         self.scale3 = nn.Parameter(torch.ones(1)*1.414)
-        
+         
     def forward(self, x):
         identity = x
 
