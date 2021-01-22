@@ -4,16 +4,19 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
-scaled_largest_singular = np.zeros((200, 110))
-scaled_smallest_singular = np.zeros((200, 110))
-scaled_condition_number = np.zeros((200, 110))
-modified_scaled_condition_number = np.zeros((200, 110))
+layernum = 1202
+scaled_largest_singular = np.zeros((200, layernum))
+scaled_smallest_singular = np.zeros((200, layernum))
+scaled_condition_number = np.zeros((200, layernum))
+modified_scaled_condition_number = np.zeros((200, layernum))
 
-folder = '/home/tf6/preconditioner/cifar10_classifiction_results_normdontscaleback+morescaler/cifar_fixup_resnet110_pc3_lr0.1_bs128_epoch200_cutmixprob0_steplr_noBN_withscalar_init_kaiming_seed0_multiscalerlrislr+kaiminginit+pconlinear_guangzongyaozua'
-for i in range(200):
+folder = '/home/tf6/preconditioner/cifar10_classifiction_results_normdontscaleback+morescaler/cifar_fixup_resnet1202_pc0.0_lr0.1_bs128_epoch200_cutmixprob0_steplr_noBN_withscalar_init_fixup_seed0'
+for i in range(20):
     m = torch.load(folder+'/checkpoint{}.th'.format(i))['state_dict']
     j = 0
     for k in m.keys():
+        # if 'scale' in k:
+        #     scaled_largest_singular[i,j] = m[k]
         if 'weight' in k:
             weight = m[k]
             # print(k, weight.shape)
@@ -27,10 +30,9 @@ for i in range(200):
             sin_num = max(1, int(singulars.shape[0] * 0.1))
             modified_scaled_condition_number[i,j] = 1. / (singulars[-sin_num:]).mean()
             j += 1
-
 def plot(array, name, log=False):
     plt.figure()
-    for j in range(37):
+    for j in range(layernum//3+1):
         plt.plot(array[:,j], label='layer{}'.format(j))
     plt.legend()
     if log:
@@ -39,7 +41,7 @@ def plot(array, name, log=False):
     plt.savefig(name+'1.pdf')
 
     plt.figure()
-    for j in range(37, 37+36):
+    for j in range(layernum//3+1, (layernum//3)*2+1):
         plt.plot(array[:,j], label='layer{}'.format(j))
     plt.legend()
     if log:
@@ -48,7 +50,7 @@ def plot(array, name, log=False):
     plt.savefig(name+'2.pdf')
 
     plt.figure()
-    for j in range(37+36, 110):
+    for j in range((layernum//3)*2+1, layernum):
         plt.plot(array[:,j], label='layer{}'.format(j))
     plt.legend()
     if log:

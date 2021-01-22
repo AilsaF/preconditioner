@@ -77,10 +77,11 @@ class PCLayer(torch.nn.Module):
             weight = weight.detach()
             S = torch.svd(weight)[1]
             sin_num = max(1, int(S.shape[0] * 0.1))
-            condition_number = 1. / (S[-sin_num:]).mean()
+            # condition_number = 1. / (S[-sin_num:]).mean()
             # print(self.cns.device)
-            self.cns.data = torch.cat((self.cns.view(-1), condition_number.view(1)))[-5:]
-            recent_cn_avg = self.cns.mean()
+            # self.cns.data = torch.cat((self.cns.view(-1), condition_number.view(1)))[-5:]
+            # recent_cn_avg = self.cns.mean()
+            recent_cn_avg = 1. / (S[-sin_num:]).mean()
             if recent_cn_avg <= 5:
                 self.pclevel = 2
             elif 5 < recent_cn_avg <= 10:
@@ -96,6 +97,8 @@ class PCLayer(torch.nn.Module):
         weight_shape = weight.shape
         weight = weight.view(weight.shape[0], -1)
         sigma = torch.norm(weight)
+        # sigma = torch.linalg.norm(weight, float('inf'))*(weight_shape[0]**0.5)
+        # print(sigma)
         # sigma = (torch.linalg.norm(weight, float('inf')) * torch.linalg.norm(weight, 1)) ** 0.5
         if sigma > 0.:
             weight = weight / sigma
@@ -107,9 +110,10 @@ class PCLayer(torch.nn.Module):
                 else:
                     weight = self.preconditionerwide(weight)
                 weight = weight.view(weight_shape)
+                
             return weight #* sigma
         else:
-            return weight.view(weight_shape) #* torch.tensor(1.)
+            return weight.view(weight_shape) 
 
 
 class PC_Conv2d(torch.nn.Conv2d):
@@ -137,29 +141,29 @@ class PC_Linear(torch.nn.Linear):
         return out
 
 
-def conv3x3(in_planes, out_planes, stride=1, PC=0):
+def conv3x3(in_planes, out_planes, stride=1, PC=0, use_adaptivePC=False):
     """3x3 convolution with padding"""
-    if PC == 0:
+    if PC == 0 and not use_adaptivePC:
         return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
                      padding=1, bias=False)
     else:
         return PC_Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
-                     padding=1, bias=False, use_adaptivePC=True, pclevel=PC)
+                     padding=1, bias=False, use_adaptivePC=use_adaptivePC, pclevel=PC)
 
 
 class FixupBasicBlock(nn.Module):
     expansion = 1
 
-    def __init__(self, inplanes, planes, stride=1, downsample=None, PC=0):
+    def __init__(self, inplanes, planes, stride=1, downsample=None, PC=0, use_adaptivePC=False):
         super(FixupBasicBlock, self).__init__()
         # Both self.conv1 and self.downsample layers downsample the input when stride != 1
         self.bias1a = nn.Parameter(torch.zeros(1))
-        self.conv1 = conv3x3(inplanes, planes, stride, PC=PC)
+        self.conv1 = conv3x3(inplanes, planes, stride, PC=PC, use_adaptivePC=use_adaptivePC)
         self.bias1b = nn.Parameter(torch.zeros(1))
         self.relu = nn.ReLU(inplace=True)
         self.bias2a = nn.Parameter(torch.zeros(1))
-        self.conv2 = conv3x3(planes, planes, PC=PC)
-        self.scale0 = nn.Parameter(torch.ones(1))
+        self.conv2 = conv3x3(planes, planes, PC=PC, use_adaptivePC=use_adaptivePC)
+        # self.scale0 = nn.Parameter(torch.ones(1))
         self.scale = nn.Parameter(torch.ones(1))
         self.bias2b = nn.Parameter(torch.zeros(1))
         self.downsample = downsample
@@ -168,7 +172,7 @@ class FixupBasicBlock(nn.Module):
         identity = x
 
         out = self.conv1(x + self.bias1a)
-        out = self.relu(out * self.scale0 + self.bias1b)
+        out = self.relu(out + self.bias1b)
 
         out = self.conv2(out + self.bias2a)
         out = out * self.scale + self.bias2b
@@ -185,23 +189,23 @@ class FixupBasicBlock(nn.Module):
 
 class FixupResNet(nn.Module):
 
-    def __init__(self, block, layers, num_classes=10, PC=0, init='fixup'):
+    def __init__(self, block, layers, num_classes=10, PC=0, use_adaptivePC=False, init='fixup'):
         super(FixupResNet, self).__init__()
         self.num_layers = sum(layers)
         self.inplanes = 16
-        self.conv1 = conv3x3(3, 16, PC=PC)
-        self.scale = nn.Parameter(torch.ones(1))
+        self.conv1 = conv3x3(3, 16, PC=PC, use_adaptivePC=use_adaptivePC)
+        # self.scale = nn.Parameter(torch.ones(1))
         self.bias1 = nn.Parameter(torch.zeros(1))
         self.relu = nn.ReLU(inplace=True)
-        self.layer1 = self._make_layer(block, 16, layers[0], PC=PC)
-        self.layer2 = self._make_layer(block, 32, layers[1], stride=2, PC=PC)
-        self.layer3 = self._make_layer(block, 64, layers[2], stride=2, PC=PC)
+        self.layer1 = self._make_layer(block, 16, layers[0], PC=PC, use_adaptivePC=use_adaptivePC)
+        self.layer2 = self._make_layer(block, 32, layers[1], stride=2, PC=PC, use_adaptivePC=use_adaptivePC)
+        self.layer3 = self._make_layer(block, 64, layers[2], stride=2, PC=PC, use_adaptivePC=use_adaptivePC)
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         self.bias2 = nn.Parameter(torch.zeros(1))
         if PC == 0:
             self.fc = nn.Linear(64, num_classes)
         else:
-            self.fc = PC_Linear(64, num_classes, use_adaptivePC=True, pclevel=PC)
+            self.fc = PC_Linear(64, num_classes, pclevel=PC, use_adaptivePC=use_adaptivePC)
         for m in self.modules():
             if isinstance(m, FixupBasicBlock):
                 if init == 'fixup':
@@ -231,22 +235,22 @@ class FixupResNet(nn.Module):
         #         n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
         #         m.weight.data.normal_(0, math.sqrt(2. / n))
 
-    def _make_layer(self, block, planes, blocks, stride=1, PC=0):
+    def _make_layer(self, block, planes, blocks, stride=1, PC=0, use_adaptivePC=False):
         downsample = None
         if stride != 1:
             downsample = nn.AvgPool2d(1, stride=stride)
 
         layers = []
-        layers.append(block(self.inplanes, planes, stride, downsample, PC=PC))
+        layers.append(block(self.inplanes, planes, stride, downsample, PC=PC, use_adaptivePC=use_adaptivePC))
         self.inplanes = planes
         for _ in range(1, blocks):
-            layers.append(block(planes, planes, PC=PC))
+            layers.append(block(planes, planes, PC=PC, use_adaptivePC=use_adaptivePC))
 
         return nn.Sequential(*layers)
 
     def forward(self, x):
         x = self.conv1(x)
-        x = self.relu(x * self.scale + self.bias1)
+        x = self.relu(x + self.bias1)
 
         x = self.layer1(x)
         x = self.layer2(x)

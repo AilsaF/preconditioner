@@ -69,6 +69,7 @@ parser.add_argument('--save-every', dest='save_every',
                     type=int, default=10)
 parser.add_argument('--seed', default=0, type=int, help='seed')
 parser.add_argument('--PC', default=0, type=float, help='seed')
+parser.add_argument('--apc', action='store_true')
 parser.add_argument('--beta', default=1.0, type=float, help='beta for cutmix')
 parser.add_argument('--cutmix_prob', default=0, type=float, help='cutmix probability')
 parser.add_argument('--opt', default='steplr', type=str)
@@ -81,8 +82,8 @@ best_prec1 = 0
 args = parser.parse_args()
 # Check the save_dir exists or not
 # args.save_dir = "test_ignore" 
-args.save_dir = "/home/tf6/preconditioner/cifar10_classifiction_results_normdontscaleback+morescaler/cifar_{}_pc{}_lr{}_bs{}_epoch{}_cutmixprob{}_{}_noBN_withscalar_init_{}_seed{}".format(
-    args.arch, args.PC, args.lr, args.batch_size, args.epochs, args.cutmix_prob, args.opt, args.init, args.seed)
+args.save_dir = "/home/tf6/preconditioner/cifar10_classifiction_results_normdontscaleback+morescaler/cifar_{}_pc{}_lr{}_bs{}_epoch{}_cutmixprob{}_{}_noBN_withscalar_init_{}_APC{}_seed{}".format(
+    args.arch, args.PC, args.lr, args.batch_size, args.epochs, args.cutmix_prob, args.opt, args.init, args.apc, args.seed)
 args.save_dir += '_{}'.format(args.specname) if args.specname else ''
 if not os.path.exists(args.save_dir):
     os.makedirs(args.save_dir)
@@ -104,10 +105,10 @@ def main():
     # model = torch.nn.DataParallel(resnet.__dict__[args.arch](skipconnection=args.skip, PC=args.PC))
     # model = resnet.__dict__[args.arch]()
     if 'fixup' in args.arch:
-        model = fixup_resnet.__dict__[args.arch](PC=args.PC, init=args.init)
+        model = fixup_resnet.__dict__[args.arch](PC=args.PC, use_adaptivePC=args.apc, init=args.init)
     else:
         model = resnet.__dict__[args.arch]()
-    model = torch.nn.DataParallel(model)
+    # model = torch.nn.DataParallel(model)
     model.cuda()
     # model.apply(init_ortho_weights)
     file.write(str(model))
@@ -167,7 +168,7 @@ def main():
         optimizer = torch.optim.SGD(
                 [{'params': parameters_others},
                 {'params': parameters_bias, 'lr': args.lr/10.}, 
-                {'params': parameters_scale, 'lr': args.lr}], 
+                {'params': parameters_scale, 'lr': args.lr/10.}], 
                 lr=args.lr, 
                 momentum=0.9, 
                 weight_decay=args.weight_decay)
