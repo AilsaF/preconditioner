@@ -21,14 +21,14 @@ __all__ = ['ResNetDebug', 'resnetDebug18', 'resnetDebug34', 'resnetDebug50', 're
 #     return IdentityModule()
 
 class ONINorm(torch.nn.Module):
-    def __init__(self, T=7, norm_groups=1, *args, **kwargs):
+    def __init__(self, T=5, norm_groups=1, *args, **kwargs):
         super(ONINorm, self).__init__()
         self.T = T
     
     def forward(self, weight):
         weight_shape = weight.shape
         weight = weight.view(weight.shape[0], -1)
-        sigma = torch.norm(weight)
+        sigma = torch.norm(weight) * 0.5
         # sigma = (torch.linalg.norm(weight, float('inf')) * torch.linalg.norm(weight, 1)) ** 0.5
         if sigma > 0.:
             weight = weight / sigma
@@ -49,7 +49,7 @@ class ONINorm(torch.nn.Module):
 
 class ONI_Conv2d(torch.nn.Conv2d):
     def __init__(self, in_channels, out_channels, kernel_size, stride=1, padding=0, dilation=1, groups=1, bias=True,
-                 T=7, norm_groups=1, norm_channels=0, NScale=1.414, adjustScale=False, ONIRow_Fix=True, *args, **kwargs):
+                 T=5, norm_groups=1, norm_channels=0, NScale=1.414, adjustScale=False, ONIRow_Fix=True, *args, **kwargs):
         super(ONI_Conv2d, self).__init__(in_channels, out_channels, kernel_size, stride, padding, dilation, groups, bias)
         print('ONI channels:--OD:',out_channels, '--ID:', in_channels, '--KS',kernel_size)
         self.weight_normalization = ONINorm(T=T, norm_groups=1)
@@ -63,7 +63,7 @@ class ONI_Conv2d(torch.nn.Conv2d):
 
 class ONI_Linear(torch.nn.Linear):
     def __init__(self, in_channels, out_channels, bias=True,
-                 T=7, norm_groups=1, norm_channels=0, NScale=1, adjustScale=False, *args, **kwargs):
+                 T=5, norm_groups=1, norm_channels=0, NScale=1, adjustScale=False, *args, **kwargs):
         super(ONI_Linear, self).__init__(in_channels, out_channels, bias)
         self.weight_normalization = ONINorm(T=T, norm_groups=1)
         # self.WNScale = 1.414 
@@ -100,8 +100,8 @@ class BasicBlock(nn.Module):
         self.bias1b = nn.Parameter(torch.zeros(1))
         self.bias2a = nn.Parameter(torch.zeros(1))
         self.bias2b = nn.Parameter(torch.zeros(1))
-        self.scale1 = nn.Parameter(torch.ones(1)*1.414)
-        self.scale2 = nn.Parameter(torch.ones(1)*1.414)
+        # self.scale1 = nn.Parameter(torch.ones(1)*10.0)
+        self.scale2 = nn.Parameter(torch.ones(1)*3.)
         
     def forward(self, x):
         identity = x
@@ -139,18 +139,18 @@ class Bottleneck(nn.Module):
         self.bias2b = nn.Parameter(torch.zeros(1))
         self.bias3a = nn.Parameter(torch.zeros(1))
         self.bias3b = nn.Parameter(torch.zeros(1))
-        self.scale1 = nn.Parameter(torch.ones(1)*1.414)
-        self.scale2 = nn.Parameter(torch.ones(1)*1.414)
-        self.scale3 = nn.Parameter(torch.ones(1)*1.414)
-         
+        # self.scale1 = nn.Parameter(torch.ones(1)*10.0)
+        # self.scale2 = nn.Parameter(torch.ones(1)*10.0)
+        self.scale3 = nn.Parameter(torch.ones(1)*3.0)
+        
     def forward(self, x):
         identity = x
 
         out = self.conv1(x + self.bias1a)
-        out = self.relu(out * self.scale1 + self.bias1b)
+        out = self.relu(out + self.bias1b)
 
         out = self.conv2(out + self.bias2a)
-        out = self.relu(out * self.scale2 + self.bias2b)
+        out = self.relu(out + self.bias2b)
 
         out = self.conv3(out + self.bias3a)
         out = out * self.scale3 + self.bias3b
@@ -183,7 +183,7 @@ class ResNetDebug(nn.Module):
         self.fc = ONI_Linear(512 * block.expansion, num_classes, adjustScale=True)
         self.bias1 = nn.Parameter(torch.zeros(1))
         self.bias2 = nn.Parameter(torch.zeros(1))
-        self.scale1 = nn.Parameter(torch.ones(1)*1.414)
+        # self.scale1 = nn.Parameter(torch.ones(1)*10.0)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -212,7 +212,7 @@ class ResNetDebug(nn.Module):
 
     def forward(self, x):
         x = self.conv1(x)
-        x = self.relu(x * self.scale1 + self.bias1)
+        x = self.relu(x  + self.bias1)
         x = self.maxpool(x)
 
         x = self.layer1(x)
