@@ -64,23 +64,31 @@ class PCLayer(torch.nn.Module):
     def forward(self, weight):
         weight_shape = weight.shape
         weight = weight.view(weight.shape[0], -1)
-        sigma = torch.norm(weight)
+        sigma = torch.norm(weight) / 3.
         # sigma = (torch.linalg.norm(weight, float('inf')) * torch.linalg.norm(weight, 1)) ** 0.5
         if sigma > 0.:
             weight = weight / sigma
             # if len(weight.shape) > 2:
             if self.pclevel:
-                # n, m = weight.shape
-                # if n >= m:
-                #     weight = self.preconditionertall(weight, self.pclevel)
-                # else:
-                #     weight = self.preconditionerwide(weight, self.pclevel)
-                for _ in range(self.pclevel):
-                    weight = 1.5 * weight - 0.5 * weight.mm(weight.t()).mm(weight)
+                n, m = weight.shape
+                if n >= m:
+                    if self.Im is None:
+                        self.Im = torch.eye(m, device=torch.device('cuda'))
+                    wtw = weight.t().mm(weight)
+                    weight = weight.mm(2.909 * self.Im + wtw.mm(-4.649 * self.Im + wtw.mm(4.023 * self.Im - 1.283 * wtw)))
+                    # weight = self.preconditionertall(weight, self.pclevel)
+                else:
+                    if self.In is None:
+                        self.In = torch.eye(n, device=torch.device('cuda'))
+                    wwt = weight.mm(weight.t())
+                    weight = (2.909 * self.In + wwt.mm(-4.649 * self.In + wwt.mm(4.023 * self.In - 1.283 * wwt))).mm(weight)
+                    # weight = self.preconditionerwide(weight, self.pclevel)
+                # for _ in range(self.pclevel):
+                #     weight = 1.5 * weight - 0.5 * weight.mm(weight.t()).mm(weight)
                 weight = weight.view(weight_shape)
-            return weight #* sigma
+            return weight 
         else:
-            return weight.view(weight_shape) #* torch.tensor(1.)
+            return weight.view(weight_shape) 
 
 
 class PC_Conv2d(torch.nn.Conv2d):
@@ -138,8 +146,8 @@ class FixupBasicBlock(nn.Module):
         self.relu = nn.ReLU(inplace=True)
         self.bias2a = nn.Parameter(torch.zeros(1))
         self.conv2 = conv3x3(planes, planes, PC=PC)
-        self.scale0 = nn.Parameter(torch.ones(1))
-        self.scale = nn.Parameter(torch.ones(1))
+        # self.scale0 = nn.Parameter(torch.ones(1))
+        self.scale = nn.Parameter(torch.ones(1)*10.)
         self.bias2b = nn.Parameter(torch.zeros(1))
         self.downsample = downsample
         self.stride = stride
@@ -148,7 +156,7 @@ class FixupBasicBlock(nn.Module):
         identity = x
 
         out = self.conv1(x + self.bias1a)
-        out = self.relu(out * self.scale0 + self.bias1b)
+        out = self.relu(out + self.bias1b)
 
         out = self.conv2(out + self.bias2a)
         out = out * self.scale + self.bias2b
@@ -176,9 +184,9 @@ class FixupBottleneck(nn.Module):
         self.bias2b = nn.Parameter(torch.zeros(1))
         self.bias3a = nn.Parameter(torch.zeros(1))
         self.conv3 = conv1x1(planes, planes * self.expansion, PC=PC)
-        self.scale0 = nn.Parameter(torch.ones(1))
-        self.scale1 = nn.Parameter(torch.ones(1))
-        self.scale = nn.Parameter(torch.ones(1))
+        # self.scale0 = nn.Parameter(torch.ones(1))
+        # self.scale1 = nn.Parameter(torch.ones(1))
+        self.scale = nn.Parameter(torch.ones(1)*10.)
         self.bias3b = nn.Parameter(torch.zeros(1))
         self.relu = nn.ReLU(inplace=True)
         self.downsample = downsample
@@ -188,10 +196,10 @@ class FixupBottleneck(nn.Module):
         identity = x
 
         out = self.conv1(x + self.bias1a)
-        out = self.relu(out * self.scale0 + self.bias1b)
+        out = self.relu(out + self.bias1b)
 
         out = self.conv2(out + self.bias2a)
-        out = self.relu(out * self.scale1 + self.bias2b)
+        out = self.relu(out + self.bias2b)
 
         out = self.conv3(out + self.bias3a)
         out = out * self.scale + self.bias3b
@@ -219,7 +227,7 @@ class FixupResNet(nn.Module):
             self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3,
                                bias=False)
         self.bias1 = nn.Parameter(torch.zeros(1))
-        self.scale = nn.Parameter(torch.ones(1))
+        # self.scale = nn.Parameter(torch.ones(1))
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         self.layer1 = self._make_layer(block, 64, layers[0], PC=PC)
@@ -249,25 +257,30 @@ class FixupResNet(nn.Module):
                     nn.init.constant_(m.weight, 0)
                     nn.init.constant_(m.bias, 0)
         elif init == 'kaiming':
-            # for m in self.modules():
+            for m in self.modules():
+                if isinstance(m, nn.Conv2d):
+                    nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+                elif isinstance(m, nn.Linear):
+                    nn.init.kaiming_normal_(m.weight, mode='fan_out')
             #     if isinstance(m, nn.Conv2d):
             #         n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
             #         m.weight.data.normal_(0, math.sqrt(2. / n))
-            for m in self.modules():
-                if isinstance(m, FixupBasicBlock):
-                    nn.init.kaiming_normal_(m.conv1.weight, mode='fan_out', nonlinearity='relu')
-                    nn.init.kaiming_normal_(m.conv2.weight, mode='fan_out', nonlinearity='relu')
-                    if m.downsample is not None:
-                        nn.init.kaiming_normal_(m.downsample.weight, mode='fan_out', nonlinearity='relu')
-                elif isinstance(m, FixupBottleneck):
-                    nn.init.kaiming_normal_(m.conv1.weight, mode='fan_out', nonlinearity='relu')
-                    nn.init.kaiming_normal_(m.conv2.weight, mode='fan_out', nonlinearity='relu')
-                    nn.init.kaiming_normal_(m.conv3.weight, mode='fan_out', nonlinearity='relu')
-                    if m.downsample is not None:
-                        nn.init.kaiming_normal_(m.downsample.weight, mode='fan_out', nonlinearity='relu')
-                elif isinstance(m, nn.Linear):
-                    nn.init.kaiming_normal_(m.weight, mode='fan_out')
-                    nn.init.constant_(m.bias, 0)
+            # for m in self.modules():
+            #     if isinstance(m, FixupBasicBlock):
+            #         nn.init.kaiming_normal_(m.conv1.weight, mode='fan_out', nonlinearity='relu')
+            #         nn.init.kaiming_normal_(m.conv2.weight, mode='fan_out', nonlinearity='relu')
+            #         if m.downsample is not None:
+            #             nn.init.kaiming_normal_(m.downsample.weight, mode='fan_out', nonlinearity='relu')
+            #     elif isinstance(m, FixupBottleneck):
+            #         nn.init.kaiming_normal_(m.conv1.weight, mode='fan_out', nonlinearity='relu')
+            #         nn.init.kaiming_normal_(m.conv2.weight, mode='fan_out', nonlinearity='relu')
+            #         nn.init.kaiming_normal_(m.conv3.weight, mode='fan_out', nonlinearity='relu')
+            #         if m.downsample is not None:
+            #             nn.init.kaiming_normal_(m.downsample.weight, mode='fan_out', nonlinearity='relu')
+            #     elif isinstance(m, nn.Linear):
+            #         nn.init.kaiming_normal_(m.weight, mode='fan_out')
+            #         nn.init.constant_(m.bias, 0)
+            
         elif init == 'ortho':
             for m in self.modules():
                 if isinstance(m, FixupBasicBlock):
@@ -301,7 +314,7 @@ class FixupResNet(nn.Module):
 
     def forward(self, x):
         x = self.conv1(x)
-        x = self.relu(x * self.scale + self.bias1)
+        x = self.relu(x + self.bias1)
         x = self.maxpool(x)
 
         x = self.layer1(x)

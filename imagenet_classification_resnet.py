@@ -292,7 +292,7 @@ def main_worker(gpu, ngpus_per_node, args):
                 'best_acc1': best_acc1,
                 'optimizer' : optimizer.state_dict(),
                 'scaler': scaler.state_dict()
-            }, is_best)
+            }, is_best, args.save_dir+'/checkpoint{}.pth.tar'.format(epoch+1))
 
 
 def train(train_loader, model, criterion, optimizer, epoch, args):
@@ -480,4 +480,4 @@ if __name__ == '__main__':
 
 # export MKL_NUM_THREADS=4 && CUDA_VISIBLE_DEVICES=4 python imagenet_classification_resnet.py &
 
-# export MKL_NUM_THREADS=4 && CUDA_VISIBLE_DEVICES=4 python imagenet_classification_resnet.py --PC 3 --init kaiming &
+# export MKL_NUM_THREADS=4 && CUDA_VISIBLE_DEVICES=4 python imagenet_classification_resnet.py --PC 5 --init kaiming 
