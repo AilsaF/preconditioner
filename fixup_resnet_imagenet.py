@@ -64,7 +64,7 @@ class PCLayer(torch.nn.Module):
     def forward(self, weight):
         weight_shape = weight.shape
         weight = weight.view(weight.shape[0], -1)
-        sigma = torch.norm(weight) / 3.
+        sigma = torch.norm(weight) / 4.
         # sigma = (torch.linalg.norm(weight, float('inf')) * torch.linalg.norm(weight, 1)) ** 0.5
         if sigma > 0.:
             weight = weight / sigma
@@ -147,7 +147,7 @@ class FixupBasicBlock(nn.Module):
         self.bias2a = nn.Parameter(torch.zeros(1))
         self.conv2 = conv3x3(planes, planes, PC=PC)
         # self.scale0 = nn.Parameter(torch.ones(1))
-        self.scale = nn.Parameter(torch.ones(1)*10.)
+        self.scale = nn.Parameter(torch.ones(1)*5.)
         self.bias2b = nn.Parameter(torch.zeros(1))
         self.downsample = downsample
         self.stride = stride
@@ -186,7 +186,7 @@ class FixupBottleneck(nn.Module):
         self.conv3 = conv1x1(planes, planes * self.expansion, PC=PC)
         # self.scale0 = nn.Parameter(torch.ones(1))
         # self.scale1 = nn.Parameter(torch.ones(1))
-        self.scale = nn.Parameter(torch.ones(1)*10.)
+        self.scale = nn.Parameter(torch.ones(1)*5.)
         self.bias3b = nn.Parameter(torch.zeros(1))
         self.relu = nn.ReLU(inplace=True)
         self.downsample = downsample
