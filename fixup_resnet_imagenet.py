@@ -75,13 +75,16 @@ class PCLayer(torch.nn.Module):
                     if self.Im is None:
                         self.Im = torch.eye(m, device=torch.device('cuda'))
                     wtw = weight.t().mm(weight)
-                    weight = weight.mm(2.909 * self.Im + wtw.mm(-4.649 * self.Im + wtw.mm(4.023 * self.Im - 1.283 * wtw)))
+                    weight = weight.mm(3.625 * self.Im + wtw.mm(-9.261 * self.Im + wtw.mm(14.097 * self.Im + wtw.mm(-10.351 * self.Im + 2.890 * wtw))))
+                    # weight = weight.mm(2.909 * self.Im + wtw.mm(-4.649 * self.Im + wtw.mm(4.023 * self.Im - 1.283 * wtw)))
                     # weight = self.preconditionertall(weight, self.pclevel)
                 else:
                     if self.In is None:
                         self.In = torch.eye(n, device=torch.device('cuda'))
                     wwt = weight.mm(weight.t())
-                    weight = (2.909 * self.In + wwt.mm(-4.649 * self.In + wwt.mm(4.023 * self.In - 1.283 * wwt))).mm(weight)
+                    weight = (3.625 * self.In + wwt.mm(-9.261 * self.In + wwt.mm(14.097 * self.In + wwt.mm(-10.351 * self.In + 2.890 * wwt)))).mm(
+                weight)
+                    # weight = (2.909 * self.In + wwt.mm(-4.649 * self.In + wwt.mm(4.023 * self.In - 1.283 * wwt))).mm(weight)
                     # weight = self.preconditionerwide(weight, self.pclevel)
                 # for _ in range(self.pclevel):
                 #     weight = 1.5 * weight - 0.5 * weight.mm(weight.t()).mm(weight)
