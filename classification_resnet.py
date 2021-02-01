@@ -140,7 +140,7 @@ def main():
             normalize,
         ]), download=True),
         batch_size=args.batch_size, shuffle=True, pin_memory=True,
-        num_workers=args.workers)
+        num_workers=args.workers, drop_last=True)
 
     val_loader = torch.utils.data.DataLoader(
         datasets.CIFAR10(root='/home/tf6/cifar10/', train=False, transform=transforms.Compose([
@@ -148,7 +148,7 @@ def main():
             normalize,
         ])),
         batch_size=128, shuffle=False, pin_memory=True,
-        num_workers=args.workers)
+        num_workers=args.workers, drop_last=True)
 
     # define loss function (criterion) and optimizer
     criterion = nn.CrossEntropyLoss().cuda()
@@ -217,7 +217,9 @@ def train(train_loader, model, criterion, optimizer, epoch):
     """
         Run one train epoch
     """
-    batch_time = AverageMeter()
+    # batch_time = AverageMeter()
+    fordward_time = AverageMeter()
+    backward_time = AverageMeter()
     data_time = AverageMeter()
     losses = AverageMeter()
     top1 = AverageMeter()
@@ -227,62 +229,66 @@ def train(train_loader, model, criterion, optimizer, epoch):
 
     end = time.time()
     for i, (input, target) in enumerate(train_loader):
+        for _ in range(10):
+            # measure data loading time
+            data_time.update(time.time() - end)
 
-        # measure data loading time
-        data_time.update(time.time() - end)
+            target = target.cuda()
+            input_var = input.cuda()
+            target_var = target
+            if args.half:
+                input_var = input_var.half()
 
-        target = target.cuda()
-        input_var = input.cuda()
-        target_var = target
-        if args.half:
-            input_var = input_var.half()
-
-        # compute output
-        r = np.random.rand(1)
-        if args.beta > 0 and r < args.cutmix_prob:
-            # generate mixed sample
-            lam = np.random.beta(args.beta, args.beta)
-            rand_index = torch.randperm(input_var.size()[0]).cuda()
-            target_a = target_var
-            target_b = target_var[rand_index]
-            bbx1, bby1, bbx2, bby2 = rand_bbox(input_var.size(), lam)
-            input_var[:, :, bbx1:bbx2, bby1:bby2] = input_var[rand_index, :, bbx1:bbx2, bby1:bby2]
-            # adjust lambda to exactly match pixel ratio
-            lam = 1 - ((bbx2 - bbx1) * (bby2 - bby1) / (input_var.size()[-1] * input_var.size()[-2]))
             # compute output
-            output = model(input_var)
-            loss = criterion(output, target_a) * lam + criterion(output, target_b) * (1. - lam)
-        else:
-            output = model(input_var)
-            loss = criterion(output, target_var)
+            r = np.random.rand(1)
+            if args.beta > 0 and r < args.cutmix_prob:
+                # generate mixed sample
+                lam = np.random.beta(args.beta, args.beta)
+                rand_index = torch.randperm(input_var.size()[0]).cuda()
+                target_a = target_var
+                target_b = target_var[rand_index]
+                bbx1, bby1, bbx2, bby2 = rand_bbox(input_var.size(), lam)
+                input_var[:, :, bbx1:bbx2, bby1:bby2] = input_var[rand_index, :, bbx1:bbx2, bby1:bby2]
+                # adjust lambda to exactly match pixel ratio
+                lam = 1 - ((bbx2 - bbx1) * (bby2 - bby1) / (input_var.size()[-1] * input_var.size()[-2]))
+                # compute output
+                output = model(input_var)
+                loss = criterion(output, target_a) * lam + criterion(output, target_b) * (1. - lam)
+            else:
+                end = time.time()
+                output = model(input_var)
+                loss = criterion(output, target_var)
+                fordward_time.update(time.time()-end)
 
-        # compute gradient and do SGD step
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+            end = time.time()
+            # compute gradient and do SGD step
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            backward_time.update(time.time()-end)
 
-        output = output.float()
-        loss = loss.float()
+            output = output.float()
+            loss = loss.float()
 
-        # measure accuracy and record loss
-        prec1 = accuracy(output.data, target)[0]
-        losses.update(loss.item(), input.size(0))
-        top1.update(prec1.item(), input.size(0))
+            # measure accuracy and record loss
+            prec1 = accuracy(output.data, target)[0]
+            losses.update(loss.item(), input.size(0))
+            top1.update(prec1.item(), input.size(0))
 
-        # measure elapsed time
-        batch_time.update(time.time() - end)
-        end = time.time()
+            # measure elapsed time
+            # batch_time.update(time.time() - end)
+            end = time.time()
 
-        if i % args.print_freq == 0:
-            msg = ('Epoch: [{0}][{1}/{2}]\t'
-                  'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
-                  'Data {data_time.val:.3f} ({data_time.avg:.3f})\t'
-                  'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
-                  'Prec@1 {top1.val:.3f} ({top1.avg:.3f})\n'.format(
-                      epoch, i, len(train_loader), batch_time=batch_time,
-                      data_time=data_time, loss=losses, top1=top1))
-            print(msg)
-            file.write(msg)
+            if i % args.print_freq == 0:
+                msg = ('Epoch: [{0}][{1}/{2}]\t'
+                    'Foward Time {batch_time.val:.4f} ({batch_time.avg:.4f})\t'
+                    'Backward Time {data_time.val:.4f} ({data_time.avg:.4f})\t'
+                    'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
+                    'Prec@1 {top1.val:.3f} ({top1.avg:.3f})\n'.format(
+                        epoch, i, len(train_loader), batch_time=fordward_time,
+                        data_time=backward_time, loss=losses, top1=top1))
+                print(msg)
+                file.write(msg)
     train_accuracy.append(top1.avg)
     np.save('{}/train_accuracy.npy'.format(args.save_dir), train_accuracy)
 
