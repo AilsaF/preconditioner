@@ -8,6 +8,7 @@ import numpy as np
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.nn.parallel
 import torch.backends.cudnn as cudnn
 import torch.distributed as dist
@@ -83,6 +84,7 @@ parser.add_argument('--PC', default=0, type=int, help='precondition level')
 parser.add_argument('--cutmix_prob', default=0, type=float, help='cutmix probability')
 parser.add_argument('--specname', default='', type=str)
 parser.add_argument('--init', default='fixup', type=str)
+parser.add_argument('--alpha', default=0.7, type=float, help='interpolation strength (uniform=1., ERM=0.)')
 
 
 args = parser.parse_args()
@@ -189,7 +191,7 @@ def main_worker(gpu, ngpus_per_node, args):
 
     # define loss function (criterion) and optimizer
     criterion = nn.CrossEntropyLoss().cuda(args.gpu)
-    # criterion_mixup = lambda pred, target, lam: (-F.log_softmax(pred, dim=1) * torch.zeros(pred.size()).cuda().scatter_(1, target.data.view(-1, 1), lam.view(-1, 1))).sum(dim=1).mean()
+    criterion_m = lambda pred, target, lam: (-F.log_softmax(pred, dim=1) * torch.zeros(pred.size()).cuda().scatter_(1, target.data.view(-1, 1), lam.view(-1, 1))).sum(dim=1).mean()
 
     # optimizer = torch.optim.SGD(model.parameters(), args.lr,
     #                             momentum=args.momentum,
@@ -320,10 +322,13 @@ def train(train_loader, model, criterion, optimizer, epoch, args):
         if torch.cuda.is_available():
             target = target.cuda(args.gpu, non_blocking=True)
 
+        inputs, targets_a, targets_b, lam = mixup_data(images, target, args.alpha, use_cuda=True)
         # compute output AMP!!
         with torch.cuda.amp.autocast():
             output = model(images)
-            loss = criterion(output, target)
+            loss_func = mixup_criterion(targets_a, targets_b, lam)
+            loss = loss_func(criterion, output)
+            # loss = criterion(output, target)
 
         # measure accuracy and record loss
         acc1, acc5 = accuracy(output, target, topk=(1, 5))
@@ -474,6 +479,58 @@ def accuracy(output, target, topk=(1,)):
             correct_k = correct[:k].reshape(-1).float().sum(0, keepdim=True)
             res.append(correct_k.mul_(100.0 / batch_size))
         return res
+
+def mixup_data(x, y, alpha=1.0, use_cuda=True, per_sample=False):
+
+    '''Compute the mixup data. Return mixed inputs, pairs of targets, and lambda'''
+    batch_size = x.size()[0]
+    if use_cuda:
+        index = torch.randperm(batch_size).cuda()
+    else:
+        index = torch.randperm(batch_size)
+
+    if alpha > 0. and not per_sample:
+        lam = torch.zeros(y.size()).fill_(np.random.beta(alpha, alpha)).cuda()
+        mixed_x = lam.view(-1, 1, 1, 1) * x + (1 - lam.view(-1, 1, 1, 1)) * x[index,:]
+    elif alpha > 0.:
+        lam = torch.Tensor(np.random.beta(alpha, alpha, size=y.size())).cuda()
+        mixed_x = lam.view(-1, 1, 1, 1) * x + (1 - lam.view(-1, 1, 1, 1)) * x[index,:]
+    else:
+        lam = torch.ones(y.size()).cuda()
+        mixed_x = x
+
+    y_a, y_b = y, y[index]
+    return mixed_x, y_a, y_b, lam
+
+def mixup_lam_idx(batch_size, alpha, use_cuda=True):
+    '''Compute the mixup data. Return mixed inputs, pairs of targets, and lambda'''
+    if alpha > 0.:
+        lam = np.random.beta(alpha, alpha)
+    else:
+        lam = 1.
+    if use_cuda:
+        index = torch.randperm(batch_size).cuda()
+    else:
+        index = torch.randperm(batch_size)
+
+    return lam, index
+
+def mixup_criterion(y_a, y_b, lam):
+    return lambda criterion, pred: criterion(pred, y_a, lam) + criterion(pred, y_b, 1 - lam)
+
+def get_mean_and_std(dataset):
+    '''Compute the mean and std value of dataset.'''
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=True, num_workers=2)
+    mean = torch.zeros(3)
+    std = torch.zeros(3)
+    print('==> Computing mean and std..')
+    for inputs, targets in dataloader:
+        for i in range(3):
+            mean[i] += inputs[:,i,:,:].mean()
+            std[i] += inputs[:,i,:,:].std()
+    mean.div_(len(dataset))
+    std.div_(len(dataset))
+    return mean, std
 
 
 if __name__ == '__main__':
