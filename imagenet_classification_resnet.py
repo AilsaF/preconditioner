@@ -88,8 +88,8 @@ parser.add_argument('--alpha', default=0.7, type=float, help='interpolation stre
 
 
 args = parser.parse_args()
-args.save_dir = "imagenet_classifiction_results/imagenet_{}_pc{}_lr{}_bs{}_epoch{}_cutmixprob{}_cosine_noBN_withscalar_init_{}_seed{}_{}_amptest".format(
-    args.arch, args.PC, args.lr, args.batch_size, args.epochs, args.cutmix_prob, args.init, args.seed, args.specname)
+args.save_dir = "imagenet_classifiction_results/imagenet_{}_pc{}_lr{}_bs{}_epoch{}_mixupalpha{}_cosine_noBN_withscalar_init_{}_seed{}_{}_amptest".format(
+    args.arch, args.PC, args.lr, args.batch_size, args.epochs, args.alpha, args.init, args.seed, args.specname)
 if not os.path.exists(args.save_dir):
     os.makedirs(args.save_dir)
 
@@ -191,7 +191,7 @@ def main_worker(gpu, ngpus_per_node, args):
 
     # define loss function (criterion) and optimizer
     criterion = nn.CrossEntropyLoss().cuda(args.gpu)
-    criterion_m = lambda pred, target, lam: (-F.log_softmax(pred, dim=1) * torch.zeros(pred.size()).cuda().scatter_(1, target.data.view(-1, 1), lam.view(-1, 1))).sum(dim=1).mean()
+    criterion_mixup = lambda pred, target, lam: (-F.log_softmax(pred, dim=1) * torch.zeros(pred.size()).cuda().scatter_(1, target.data.view(-1, 1), lam.view(-1, 1))).sum(dim=1).mean()
 
     # optimizer = torch.optim.SGD(model.parameters(), args.lr,
     #                             momentum=args.momentum,
@@ -277,7 +277,7 @@ def main_worker(gpu, ngpus_per_node, args):
         adjust_learning_rate(optimizer, epoch, args)
 
         # train for one epoch
-        train(train_loader, model, criterion, optimizer, epoch, args)
+        train(train_loader, model, criterion_mixup, optimizer, epoch, args)
 
         # evaluate on validation set
         acc1 = validate(val_loader, model, criterion, args)
