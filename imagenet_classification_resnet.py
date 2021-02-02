@@ -86,9 +86,9 @@ parser.add_argument('--specname', default='', type=str)
 parser.add_argument('--init', default='fixup', type=str)
 parser.add_argument('--alpha', default=0.7, type=float, help='interpolation strength (uniform=1., ERM=0.)')
 
-
+cur_dir = os.path.abspath(os.getcwd())
 args = parser.parse_args()
-args.save_dir = "imagenet_classifiction_results/imagenet_{}_pc{}_lr{}_bs{}_epoch{}_mixupalpha{}_cosine_noBN_withscalar_init_{}_seed{}_{}_amptest".format(
+args.save_dir = cur_dir+"/imagenet_classifiction_results/imagenet_{}_pc{}_lr{}_bs{}_epoch{}_mixupalpha{}_cosine_noBN_withscalar_init_{}_seed{}_{}_amptest".format(
     args.arch, args.PC, args.lr, args.batch_size, args.epochs, args.alpha, args.init, args.seed, args.specname)
 if not os.path.exists(args.save_dir):
     os.makedirs(args.save_dir)
@@ -295,7 +295,7 @@ def main_worker(gpu, ngpus_per_node, args):
                 'best_acc1': best_acc1,
                 'optimizer' : optimizer.state_dict(),
                 'scaler': scaler.state_dict()
-            }, is_best, args.save_dir+'/checkpoint{}.pth.tar'.format(epoch+1))
+            }, is_best, args.save_dir+'/checkpoint.pth.tar')
 
 
 def train(train_loader, model, criterion, optimizer, epoch, args):
