@@ -17,7 +17,8 @@ DATASET = 'mnist'
 batch_size_train = 200
 batch_size_test = 1000
 LEARNING_RATE = 1e-4
-MOMENTUM = 0.99
+OPT = 'adam'
+MOMENTUM = (0.0, 0.99) #0.99
 DEPTH = 100
 CHANNEL = 128
 INIT_METHOD = 'default'
@@ -223,7 +224,8 @@ net.cuda()
 net = torch.nn.DataParallel(net, device_ids=range(torch.cuda.device_count()))
 cudnn.benchmark = True
 criterion = nn.CrossEntropyLoss()
-optimizer = torch.optim.SGD(net.parameters(), lr=LEARNING_RATE, momentum=MOMENTUM)
+# optimizer = torch.optim.SGD(net.parameters(), lr=LEARNING_RATE, momentum=MOMENTUM)
+optimizer = torch.optim.Adam(net.parameters(), lr=LEARNING_RATE, betas=(MOMENTUM[0], MOMENTUM[1]))
 scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=len(trainloader))
 
 for epoch in range(50):
