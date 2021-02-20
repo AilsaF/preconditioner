@@ -66,26 +66,6 @@ else:
 import datasets
 
 
-# IMAGE_EXTENSIONS = {'bmp', 'jpg', 'jpeg', 'pgm', 'png', 'ppm',
-#                     'tif', 'tiff', 'webp'}
-
-
-# class ImagePathDataset(torch.utils.data.Dataset):
-#     def __init__(self, files, transforms=None):
-#         self.files = files
-#         self.transforms = transforms
-
-#     def __len__(self):
-#         return len(self.files)
-
-#     def __getitem__(self, i):
-#         path = self.files[i]
-#         img = Image.open(path).convert('RGB')
-#         if self.transforms is not None:
-#             img = self.transforms(img)
-#         return img
-
-
 def get_activations_statistics_for_gendata(G_model, incep_model, total_img=10000, batch_size=50, dims=2048, device='cpu'):
     incep_model.eval()
     G_model.to(device).eval()
@@ -150,6 +130,7 @@ def get_activations_statistics_for_realdata(dataset_name, image_size, incep_mode
 
     mu = np.mean(pred_arr, axis=0)
     sigma = np.cov(pred_arr, rowvar=False)
+    os.makedirs('inception_stats')
     np.savez('inception_stats/'+dataset_name+'_inception_statistics.npz', **{'mu' : mu, 'sigma' : sigma})
     return mu, sigma
 
