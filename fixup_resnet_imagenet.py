@@ -64,7 +64,7 @@ class PCLayer(torch.nn.Module):
     def forward(self, weight):
         weight_shape = weight.shape
         weight = weight.view(weight.shape[0], -1)
-        sigma = torch.norm(weight) / 4.
+        sigma = torch.norm(weight) / 3.
         # sigma = (torch.linalg.norm(weight, float('inf')) * torch.linalg.norm(weight, 1)) ** 0.5
         if sigma > 0.:
             weight = weight / sigma
